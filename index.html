@@ -1,0 +1,2095 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ElectoStock — Component Inventory</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#0d0f11;--bg2:#131619;--bg3:#1a1e22;
+    --border:#252b31;--border2:#2e363e;
+    --text:#e2e8ef;--text2:#8a97a5;--text3:#505d6a;
+    --accent:#00d4aa;--accent2:#007a62;--accent-dim:rgba(0,212,170,0.08);
+    --warn:#f59e0b;--danger:#ef4444;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+    --radius:6px;
+  }
+  body{font-family:var(--sans);background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:14px;line-height:1.5;}
+  .shell{display:flex;height:100vh;overflow:hidden;}
+
+  .sidebar{width:224px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+  .logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);}
+  .logo-mark{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;margin-bottom:2px;}
+  .logo-name{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.01em;}
+  .nav{padding:12px 10px;flex-shrink:0;}
+  .nav-label{font-size:10px;letter-spacing:.1em;color:var(--text3);text-transform:uppercase;padding:0 8px;margin:12px 0 6px;}
+  .nav-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--radius);cursor:pointer;color:var(--text2);transition:all .15s;font-size:13px;border:none;background:none;width:100%;text-align:left;}
+  .nav-item:hover{background:var(--bg3);color:var(--text);}
+  .nav-item.active{background:var(--accent-dim);color:var(--accent);}
+  .nav-icon{font-size:14px;width:18px;text-align:center;}
+  .cat-filter{border-top:1px solid var(--border);padding:10px 10px 14px;flex:1;overflow-y:auto;min-height:0;}
+  .cat-filter-header{display:flex;align-items:center;justify-content:space-between;padding:0 8px;margin-bottom:6px;}
+  .cat-manage-btn{font-size:11px;font-family:var(--mono);color:var(--text3);background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:3px;transition:color .15s;}
+  .cat-manage-btn:hover{color:var(--accent);}
+  .cat-tag{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:20px;border:1px solid var(--border2);font-size:11px;color:var(--text2);cursor:pointer;margin:2px;transition:all .15s;font-family:var(--mono);background:none;}
+  .cat-tag:hover{border-color:var(--accent2);color:var(--text);}
+  .cat-tag.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+  .cat-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+
+  .sync-status{padding:10px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;}
+  .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s;}
+  .sync-dot.ok{background:var(--accent);}
+  .sync-dot.syncing{background:var(--warn);animation:pulse 1s infinite;}
+  .sync-dot.error{background:var(--danger);}
+  .sync-dot.poll{background:var(--accent);animation:ping .8s ease-out;}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.3;}}
+  @keyframes ping{0%{box-shadow:0 0 0 0 rgba(0,212,170,.6);}100%{box-shadow:0 0 0 6px rgba(0,212,170,0);}}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden;height:100vh;}
+  .topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;}
+  .search-wrap{position:relative;flex:1;min-width:200px;max-width:380px;}
+  .search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none;}
+  .search-input{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:7px 10px 7px 32px;font-size:13px;font-family:var(--sans);outline:none;transition:border-color .15s;}
+  .search-input:focus{border-color:var(--accent2);}
+  .search-input::placeholder{color:var(--text3);}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-family:var(--sans);font-weight:500;cursor:pointer;transition:all .15s;border:none;white-space:nowrap;}
+  .btn-primary{background:var(--accent);color:#041a14;}
+  .btn-primary:hover{background:#00f0c2;}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-ghost{background:none;border:1px solid var(--border2);color:var(--text2);}
+  .btn-ghost:hover{border-color:var(--border);color:var(--text);background:var(--bg3);}
+  .btn-ghost:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-danger{background:none;border:1px solid rgba(239,68,68,.3);color:#fca5a5;}
+  .btn-danger:hover{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.5);}
+  .btn-danger:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-warn{background:none;border:1px solid rgba(245,158,11,.3);color:#fcd34d;}
+  .btn-warn:hover{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.5);}
+  .btn-sm{padding:4px 10px;font-size:12px;}
+  .btn-xs{padding:2px 7px;font-size:11px;}
+
+  .stats-bar{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border);}
+  .stat-cell{flex:1;background:var(--bg2);padding:12px 20px;display:flex;flex-direction:column;gap:2px;}
+  .stat-label{font-size:11px;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;font-family:var(--mono);}
+  .stat-val{font-size:22px;font-weight:600;font-family:var(--mono);color:var(--text);}
+  .stat-val.warn{color:var(--warn);}
+
+  .alerts-panel{padding:0 24px;margin-top:16px;}
+  .alert-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);margin-bottom:6px;font-size:13px;color:#fca5a5;}
+  .alert-warn{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:#fcd34d;}
+
+  .update-toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--accent2);border-radius:var(--radius);padding:10px 16px;font-size:12px;font-family:var(--mono);color:var(--accent);z-index:300;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none;}
+  .update-toast.show{opacity:1;transform:translateY(0);}
+
+  .table-wrap{flex:1;overflow:auto;padding:20px 24px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  thead th{text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-family:var(--mono);font-weight:400;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer;user-select:none;}
+  thead th:hover{color:var(--text2);}
+  thead th.no-sort{cursor:default;}
+  thead th.no-sort:hover{color:var(--text3);}
+  tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer;}
+  tbody tr:hover{background:var(--bg2);}
+  tbody tr.selected{background:var(--accent-dim);}
+  tbody tr.flash{animation:rowflash .8s ease-out;}
+  @keyframes rowflash{0%{background:rgba(0,212,170,.15);}100%{background:transparent;}}
+  td{padding:10px 12px;vertical-align:middle;}
+  td.mono{font-family:var(--mono);font-size:12px;color:var(--text2);}
+  .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;font-family:var(--mono);white-space:nowrap;}
+  .badge-cat{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);}
+  .badge-bom{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);color:#a5b4fc;margin-left:4px;font-size:10px;padding:1px 6px;}
+  .stock-bar-wrap{display:flex;align-items:center;gap:8px;}
+  .stock-bar{width:60px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
+  .stock-fill{height:100%;border-radius:2px;transition:width .3s;}
+  .qty{font-family:var(--mono);font-size:13px;}
+  .qty.low{color:var(--danger);}.qty.warn{color:var(--warn);}.qty.ok{color:var(--accent);}
+  .location-pill{font-family:var(--mono);font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 7px;border-radius:4px;border:1px solid var(--border);white-space:nowrap;}
+  .action-btns{display:flex;gap:4px;opacity:0;transition:opacity .1s;flex-wrap:wrap;justify-content:flex-end;}
+  tr:hover .action-btns{opacity:1;}
+
+  .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading-overlay{display:flex;align-items:center;justify-content:center;padding:60px 20px;gap:12px;color:var(--text3);font-family:var(--mono);font-size:13px;}
+  .empty{text-align:center;padding:60px 20px;color:var(--text3);}
+  .empty-icon{font-size:40px;margin-bottom:12px;}
+
+  .notes-cell{font-size:12px;color:var(--text2);max-width:200px;}
+  .notes-cell a{color:var(--accent);text-decoration:none;font-family:var(--mono);font-size:11px;}
+  .notes-cell a:hover{text-decoration:underline;}
+
+  /* ── Modals ── */
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .15s;}
+  .modal-overlay.open{opacity:1;pointer-events:all;}
+  .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:520px;max-width:95vw;max-height:90vh;overflow:auto;transform:translateY(8px);transition:transform .15s;}
+  .modal-overlay.open .modal{transform:translateY(0);}
+  .modal-sm{width:420px;}
+  .modal-md{width:560px;}
+  /* BOM modal: overflow visible so the picker dropdown isn't clipped */
+  .modal-bom{width:560px;overflow:visible;max-height:none;}
+  .modal-bom .modal-body{max-height:calc(90vh - 120px);overflow-y:auto;overflow-x:visible;}
+  .modal-header{padding:18px 20px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+  .modal-title{font-size:15px;font-weight:600;}
+  .modal-body{padding:20px;display:flex;flex-direction:column;gap:14px;}
+  .modal-footer{padding:14px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;align-items:center;}
+  .modal-err{font-size:12px;color:var(--danger);margin-right:auto;}
+  .form-group{display:flex;flex-direction:column;gap:5px;}
+  .form-label{font-size:12px;color:var(--text2);font-weight:500;}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  input,select,textarea{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:13px;font-family:var(--sans);outline:none;transition:border-color .15s;width:100%;}
+  input:focus,select:focus,textarea:focus{border-color:var(--accent2);}
+  select option{background:var(--bg3);}
+  textarea{resize:vertical;min-height:60px;}
+  .close-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1;padding:2px 6px;border-radius:4px;transition:color .1s;}
+  .close-btn:hover{color:var(--text);}
+
+  /* ── BOM component picker ── */
+  .bom-picker-wrap{position:relative;flex:1;}
+  .bom-picker-display{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:5px 8px;font-size:12px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;gap:4px;}
+  .bom-picker-display:hover{border-color:var(--border);}
+  .bom-picker-display.selected-val{color:var(--text);}
+  .bom-picker-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);z-index:300;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+  .bom-picker-search-row{display:flex;gap:6px;padding:8px;}
+  .bom-picker-search{flex:1;font-size:12px;padding:5px 8px;}
+  .bom-picker-cat{font-size:12px;padding:5px 8px;width:auto;}
+  .bom-picker-list{max-height:450px;overflow-y:auto;}
+  .bom-picker-opt{padding:7px 10px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);}
+  .bom-picker-opt:last-child{border-bottom:none;}
+  .bom-picker-opt:hover{background:var(--bg3);}
+  .bom-picker-opt.active{background:var(--accent-dim);color:var(--accent);}
+  .bom-picker-empty{padding:12px 10px;font-size:12px;color:var(--text3);text-align:center;}
+  .bom-lines{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;}
+  .bom-line{display:grid;grid-template-columns:1fr 80px 32px;gap:6px;align-items:center;}
+  .bom-line select{font-size:12px;padding:5px 8px;}
+  .bom-line input{font-size:12px;padding:5px 8px;text-align:center;}
+  .bom-remove-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;border-radius:4px;padding:2px 4px;transition:color .1s;width:32px;text-align:center;}
+  .bom-remove-btn:hover{color:var(--danger);}
+  .bom-add-btn{align-self:flex-start;}
+  .actions-col{text-align:right;min-width:120px;}
+
+  /* ── BOM checkout preview ── */
+  .bom-checkout-list{display:flex;flex-direction:column;gap:2px;max-height:400px;overflow-y:auto;}
+  .bom-co-assembly{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border2);font-weight:500;font-size:13px;margin-top:4px;}
+  .bom-co-assembly:first-child{margin-top:0;}
+  .bom-co-assembly-icon{color:#a5b4fc;font-size:11px;flex-shrink:0;}
+  .bom-checkout-row{display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);font-size:13px;}
+  .bom-checkout-row.insufficient{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.05);}
+  .bom-co-name{flex:1;}
+  .bom-co-qty{font-family:var(--mono);font-size:12px;color:var(--text2);white-space:nowrap;}
+  .bom-co-stock{font-family:var(--mono);font-size:12px;white-space:nowrap;}
+  .bom-co-stock.ok{color:var(--accent);}
+  .bom-co-stock.warn{color:var(--warn);}
+  .bom-co-stock.bad{color:var(--danger);}
+
+  /* ── Category manager ── */
+  .cat-list{display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;padding-right:2px;}
+  .cat-list-item{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);}
+  .cat-swatch-btn{width:20px;height:20px;border-radius:50%;flex-shrink:0;cursor:pointer;border:2px solid transparent;transition:border-color .15s;}
+  .cat-swatch-btn:hover{border-color:var(--text2);}
+  .cat-name-text{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .cat-count{font-size:11px;font-family:var(--mono);color:var(--text3);white-space:nowrap;margin-right:2px;}
+  .color-presets{display:flex;gap:5px;flex-wrap:wrap;}
+  .color-preset{width:20px;height:20px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color .15s;flex-shrink:0;}
+  .color-preset:hover{border-color:var(--text2);}
+  .color-preset.selected{border-color:var(--text);}
+  .cat-add-row{display:flex;gap:8px;align-items:center;}
+  .cat-section-label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-family:var(--mono);}
+  .color-popover{position:absolute;top:26px;left:50%;transform:translateX(-50%);background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:10px;z-index:200;display:none;gap:5px;flex-wrap:wrap;width:160px;}
+  .color-popover.open{display:flex;}
+
+  /* ── History view ── */
+  .hist-event{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:8px;overflow:hidden;}
+  .hist-event-header{display:flex;align-items:center;gap:12px;padding:11px 14px;cursor:pointer;user-select:none;transition:background .1s;}
+  .hist-event-header:hover{background:var(--bg3);}
+  .hist-chevron{font-size:10px;color:var(--text3);flex-shrink:0;transition:transform .2s;width:12px;}
+  .hist-event.open .hist-chevron{transform:rotate(90deg);}
+  .hist-job{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:500;white-space:nowrap;}
+  .hist-asm{font-size:13px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .hist-built{font-family:var(--mono);font-size:12px;color:var(--text2);white-space:nowrap;}
+  .hist-ts{font-family:var(--mono);font-size:11px;color:var(--text3);white-space:nowrap;}
+  .hist-detail{display:none;border-top:1px solid var(--border);padding:10px 14px;display:none;flex-direction:column;gap:3px;}
+  .hist-event.open .hist-detail{display:flex;}
+  .hist-comp-row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:4px;font-size:12px;}
+  .hist-comp-row:hover{background:var(--bg3);}
+  .hist-comp-name{flex:1;color:var(--text);}
+  .hist-comp-part{font-family:var(--mono);font-size:11px;color:var(--text3);}
+  .hist-comp-loc{font-family:var(--mono);font-size:11px;color:var(--text3);}
+  .hist-comp-qty{font-family:var(--mono);font-size:12px;font-weight:500;white-space:nowrap;color:var(--text2);}
+  .hist-sub-header{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:#a5b4fc;font-weight:500;}
+  .hist-sub-icon{font-size:10px;}
+  .detail-panel{width:320px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;transition:width .2s;display:flex;flex-direction:column;height:100vh;}
+  .detail-panel.closed{width:0;}
+  .detail-body{padding:16px;overflow-y:auto;flex:1;min-height:0;}
+  .detail-header{padding:16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0;}
+  .detail-part{font-size:12px;font-family:var(--mono);color:var(--accent);margin-bottom:4px;}
+  .detail-name{font-size:16px;font-weight:600;line-height:1.3;}
+  .detail-row{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--border);}
+  .detail-row:last-child{border-bottom:none;}
+  .detail-key{font-size:12px;color:var(--text3);}
+  .detail-val{font-size:13px;font-family:var(--mono);text-align:right;word-break:break-all;}
+  .detail-val a{color:var(--accent);text-decoration:none;}
+  .detail-val a:hover{text-decoration:underline;}
+  .detail-actions{padding:12px 16px;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);flex-shrink:0;}
+  .detail-section{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);margin:16px 0 8px;font-family:var(--mono);}
+  .detail-bom-line{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;}
+  .detail-bom-line:last-child{border-bottom:none;}
+  .detail-bom-qty{font-family:var(--mono);font-size:12px;color:var(--text3);}
+</style>
+</head>
+<body>
+
+<div class="update-toast" id="update-toast"></div>
+
+<div class="shell">
+
+  <!-- ══ Sidebar ══ -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">⬡ ElectoStock</div>
+      <div class="logo-name">Inventory</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Views</div>
+      <button class="nav-item active" onclick="setView('all',this)"><span class="nav-icon">▦</span> All Components</button>
+      <button class="nav-item" onclick="setView('low',this)"><span class="nav-icon" style="color:var(--danger)">⚠</span> Low Stock</button>
+      <button class="nav-item" onclick="setView('bom',this)"><span class="nav-icon" style="color:#a5b4fc">◈</span> Has BOM</button>
+      <button class="nav-item" onclick="setView('nobom',this)"><span class="nav-icon" style="color:var(--text3)">◇</span> No BOM</button>
+      <div class="nav-label">Actions</div>
+      <button class="nav-item" onclick="manualSync()"><span class="nav-icon">↻</span> Sync Now</button>
+      <button class="nav-item" onclick="setView('history',this)"><span class="nav-icon">⏱</span> Checkout History</button>
+      <button class="nav-item" onclick="exportCSV()"><span class="nav-icon">⤓</span> Export Inventory</button>
+      <button class="nav-item" onclick="exportBOMs()"><span class="nav-icon">⤓</span> Export BOMs</button>
+    </nav>
+    <div class="cat-filter">
+      <div class="cat-filter-header">
+        <span class="nav-label" style="margin:0">Categories</span>
+        <button class="cat-manage-btn" onclick="openCatModal()">⚙ Manage</button>
+      </div>
+      <div id="cat-tags"></div>
+    </div>
+    <div class="sync-status">
+      <div class="sync-dot" id="sync-dot"></div>
+      <span id="sync-text">Connecting…</span>
+    </div>
+  </aside>
+
+  <!-- ══ Main ══ -->
+  <div class="main">
+    <div class="topbar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" id="search" placeholder="Search by name, supplier part #, location…" oninput="renderTable()">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+        <select id="bom-filter-select" style="width:auto;padding:7px 10px;" onchange="onBomFilterChange()">
+          <option value="">All Items</option>
+        </select>
+        <label id="bom-subasm-label" style="display:none;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;">
+          <input type="checkbox" id="bom-subasm-check" onchange="renderTable()" style="width:auto;cursor:pointer;accent-color:var(--accent)"/>
+          Include Sub-Assemblies
+        </label>
+        <select id="sort-select" style="width:auto;padding:7px 10px;" onchange="renderTable()">
+          <option value="name">Sort: Name</option>
+          <option value="qty">Sort: Quantity</option>
+          <option value="supplier_part">Sort: Supplier Part #</option>
+          <option value="category">Sort: Category</option>
+        </select>
+        <button class="btn btn-primary" onclick="openModal()">＋ Add Item</button>
+      </div>
+    </div>
+
+    <div class="stats-bar" id="stats-bar"></div>
+    <div class="alerts-panel" id="alerts-panel"></div>
+
+    <div class="table-wrap">
+      <div class="loading-overlay" id="loading-overlay">
+        <div class="spinner"></div> Loading from Google Sheets…
+      </div>
+      <table id="inv-table" style="display:none">
+        <thead><tr>
+          <th onclick="sortBy('supplier_part')">Supplier Part #</th>
+          <th onclick="sortBy('name')">Component Name</th>
+          <th onclick="sortBy('category')">Category</th>
+          <th onclick="sortBy('qty')">Stock</th>
+          <th class="no-sort">Location</th>
+          <th onclick="sortBy('unit_cost')">Unit Cost</th>
+          <th onclick="sortBy('supplier')">Supplier</th>
+          <th class="no-sort">Notes</th>
+          <th class="no-sort" style="text-align:right">Actions</th>
+        </tr></thead>
+        <tbody id="inv-body"></tbody>
+      </table>
+      <div id="empty-state" class="empty" style="display:none">
+        <div class="empty-icon">📦</div>
+        <div style="font-weight:500;margin-bottom:4px">No items found</div>
+        <div style="font-size:12px">Try a different search or add new items</div>
+      </div>
+    </div>
+
+    <!-- ══ History Panel (shown when currentView === 'history') ══ -->
+    <div id="history-panel" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden;">
+      <div style="padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg2);">
+        <input id="history-search" style="flex:1;max-width:300px" placeholder="Filter by job, assembly, or component…" oninput="renderHistoryView()"/>
+        <select id="history-assembly-filter" style="width:auto" onchange="renderHistoryView()">
+          <option value="">All assemblies</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" onclick="loadHistory()">↻ Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportHistoryCSV()">⤓ Export CSV</button>
+        <span id="history-count" style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:4px"></span>
+      </div>
+      <div style="flex:1;overflow-y:auto;padding:20px 24px;" id="history-list-wrap">
+        <div id="history-loading" style="display:none;text-align:center;padding:60px;color:var(--text3);font-family:var(--mono);font-size:13px;">
+          <div class="spinner" style="margin:0 auto 12px"></div>Loading checkout history…
+        </div>
+        <div id="history-empty" style="display:none;text-align:center;padding:60px;color:var(--text3);font-size:13px;">
+          <div style="font-size:32px;margin-bottom:12px">⏱</div>
+          <div style="font-weight:500;margin-bottom:4px">No checkout events yet</div>
+          <div style="font-size:12px">BOM checkouts will appear here</div>
+        </div>
+        <div id="history-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Detail Panel ══ -->
+  <div class="detail-panel closed" id="detail-panel">
+    <div id="detail-content" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;"></div>
+  </div>
+</div>
+
+<!-- ══ Add / Edit Modal ══ -->
+<div class="modal-overlay" id="modal" onclick="if(event.target.id==='modal')closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">Add Component</div>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Part Number</label><input id="f-part" placeholder="Internal part # (optional)"/></div>
+        <div class="form-group"><label class="form-label">Category *</label><select id="f-cat"></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Component Name *</label><input id="f-name" placeholder="e.g. 10kΩ Resistor 0805 1%"/></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Quantity *</label><input id="f-qty" type="number" min="0" placeholder="0"/></div>
+        <div class="form-group"><label class="form-label">Min Stock Level</label><input id="f-min" type="number" min="0" placeholder="10"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Location</label><input id="f-loc" placeholder="e.g. Bin A3"/></div>
+        <div class="form-group"><label class="form-label">Unit Cost ($)</label><input id="f-cost" type="number" min="0" step="0.001" placeholder="0.00"/></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Supplier</label><input id="f-supplier" placeholder="e.g. Digi-Key"/></div>
+        <div class="form-group"><label class="form-label">Supplier Part #</label><input id="f-supplier-part" placeholder="e.g. 311-10KARCT-ND"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea id="f-notes" placeholder="Datasheet URL, specifications…"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-err" id="modal-err"></span>
+      <button class="btn btn-ghost" id="modal-copy-btn" onclick="copyAsNew()" style="display:none;margin-right:auto">⎘ Copy as New</button>
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-save" onclick="saveItem()">Add Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Adjust Modal ══ -->
+<div class="modal-overlay" id="adj-modal" onclick="if(event.target.id==='adj-modal')closeAdjModal()">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title" id="adj-title">Adjust Stock</div>
+      <button class="close-btn" onclick="closeAdjModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="adj-info" style="font-size:13px;color:var(--text2);"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Action</label>
+          <select id="adj-action">
+            <option value="add">Check In (Add)</option>
+            <option value="remove">Check Out (Remove)</option>
+            <option value="set">Set Exact</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Quantity</label><input id="adj-qty" type="number" min="0" value="1"/></div>
+      </div>
+      <div class="form-group"><label class="form-label">Note (optional)</label><input id="adj-note" placeholder="Who, project, reason…"/></div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-err" id="adj-err"></span>
+      <button class="btn btn-ghost" onclick="closeAdjModal()">Cancel</button>
+      <button class="btn btn-primary" id="adj-save" onclick="applyAdjust()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BOM Editor Modal ══ -->
+<div class="modal-overlay" id="bom-modal" onclick="if(event.target.id==='bom-modal')closeBomModal()">
+  <div class="modal modal-bom">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="bom-modal-title">Edit BOM</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="bom-modal-sub"></div>
+      </div>
+      <button class="close-btn" onclick="closeBomModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--text2)">
+        Define the components consumed when one unit of this item is checked out.
+        Nested BOMs are resolved automatically at checkout.
+      </div>
+      <!-- Column headers -->
+      <div style="display:grid;grid-template-columns:1fr 70px 60px 32px;gap:6px;padding:0 0 4px;">
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em">Component</span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;text-align:center">Qty</span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;text-align:right">Line Cost</span>
+        <span></span>
+      </div>
+      <div class="bom-lines" id="bom-lines"></div>
+      <button class="btn btn-ghost btn-sm bom-add-btn" onclick="addBomLine()">＋ Add Component</button>
+      <div id="bom-cost-footer" style="font-size:12px;padding:8px 10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border)"></div>
+      <span id="bom-modal-err" style="font-size:12px;color:var(--danger);min-height:16px;display:block"></span>
+    </div>
+    <div class="modal-footer">
+      <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-right:auto">Saves to shared sheet</span>
+      <button class="btn btn-ghost" onclick="closeBomModal()">Cancel</button>
+      <button class="btn btn-primary" id="bom-save-btn" onclick="saveBom()">Save BOM</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ BOM Checkout Preview Modal ══ -->
+<div class="modal-overlay" id="bom-checkout-modal" onclick="if(event.target.id==='bom-checkout-modal')closeBomCheckout()">
+  <div class="modal modal-md">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title">BOM Checkout</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px" id="bom-co-sub"></div>
+      </div>
+      <button class="close-btn" onclick="closeBomCheckout()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row" style="grid-template-columns:80px 2fr 1fr;align-items:end">
+        <div class="form-group">
+          <label class="form-label">Qty</label>
+          <div style="display:flex;align-items:center;gap:5px">
+            <input type="number" min="1" value="1" id="bom-co-qty-input"/>
+            <span style="font-size:11px;color:var(--text3);white-space:nowrap">unit(s)</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Job Name *</label>
+          <input id="bom-co-jobname" placeholder="e.g. GMU" oninput="validateBomCheckout()"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Job Number *</label>
+          <input id="bom-co-job" placeholder="e.g. 25-47" oninput="validateBomCheckout()"/>
+        </div>
+      </div>
+      <div class="bom-checkout-list" id="bom-checkout-list"></div>
+      <div id="bom-co-warning" style="display:none;padding:10px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);font-size:12px;color:#fcd34d;"></div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-err" id="bom-co-err"></span>
+      <button class="btn btn-ghost" onclick="closeBomCheckout()">Cancel</button>
+      <button class="btn btn-ghost" id="bom-co-print" onclick="confirmBomCheckout(true)" disabled>⎙ Checkout & Print</button>
+      <button class="btn btn-primary" id="bom-co-confirm" onclick="confirmBomCheckout(false)" disabled>Confirm Checkout</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Category Manager Modal ══ -->
+<div class="modal-overlay" id="cat-modal" onclick="if(event.target.id==='cat-modal')closeCatModal()">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title">Manage Categories</div>
+      <button class="close-btn" onclick="closeCatModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cat-list" id="cat-list"></div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;flex-direction:column;gap:10px;">
+        <div class="cat-section-label">Add New Category</div>
+        <div class="cat-add-row">
+          <input id="new-cat-name" placeholder="Category name" style="flex:1"/>
+          <button class="btn btn-primary btn-sm" id="add-cat-btn" onclick="addCategory()">Add</button>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-family:var(--mono);">Color</div>
+          <div class="color-presets" id="color-presets"></div>
+        </div>
+      </div>
+      <span id="cat-modal-err" style="font-size:12px;color:var(--danger);min-height:16px;display:block"></span>
+    </div>
+    <div class="modal-footer">
+      <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-right:auto">Changes sync to all users</span>
+      <button class="btn btn-ghost" onclick="closeCatModal()">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ╔══════════════════════════════════════════════════════════╗
+//  CONFIG — the only section you need to edit
+//  To point this app at a different Google Sheet:
+//    1. Open your Apps Script Web App
+//    2. Deploy > Manage deployments > copy the /exec URL
+//    3. Paste it below, replacing the existing URL
+// ╚══════════════════════════════════════════════════════════╝
+const SHEET_URL        = 'https://script.google.com/macros/s/AKfycbzbSuWw-DXNsrO0WFPz9mFENL_75r-g1Kt8IzYSucpEGmYndtQhY1K4-ntYtxqshUc-/exec';
+const POLL_INTERVAL_MS = 30_000; // How often to check for sheet changes (ms)
+// ════════════════════════════════════════════════════════════
+
+const COLOR_PALETTE = [
+  '#8a97a5','#3b82f6','#a855f7','#10b981','#f59e0b','#ef4444',
+  '#ec4899','#06b6d4','#f97316','#84cc16','#6366f1','#78716c',
+  '#e11d48','#0ea5e9','#14b8a6','#22c55e','#8b5cf6','#f43f5e',
+  '#eab308','#64748b','#fb923c','#38bdf8',
+];
+
+// ══════════════════════════════════════════════════════════
+//  State
+// ══════════════════════════════════════════════════════════
+let inventory   = [];
+let categories  = [];
+let boms        = [];   // [{ parent_id, child_id, quantity }]
+let activeCats  = new Set();
+let currentView = 'all';
+let selectedId  = null;
+let editId      = null;
+let adjId       = null;
+let bomEditId   = null; // item being BOM-edited
+let bomCoData   = null; // resolved checkout data
+let sortCol     = 'name';
+let sortDir     = 1;
+let newCatColor = COLOR_PALETTE[0];
+let openPopover = null;
+let lastKnownTimestamp = null;
+let pollTimer   = null;
+let isSyncing   = false;
+let historyEntries = [];
+
+// ══════════════════════════════════════════════════════════
+//  API
+// ══════════════════════════════════════════════════════════
+async function api(action, data = {}) {
+  const url = SHEET_URL
+    + '?action=' + encodeURIComponent(action)
+    + '&data='   + encodeURIComponent(JSON.stringify(data));
+  const res = await fetch(url, { redirect: 'follow' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json;
+}
+
+// ══════════════════════════════════════════════════════════
+//  BOM helpers
+// ══════════════════════════════════════════════════════════
+
+// Get direct BOM lines for a parent
+function getBomLines(parentId) {
+  return boms.filter(b => b.parent_id === parentId);
+}
+
+function hasBom(itemId) {
+  return boms.some(b => b.parent_id === itemId);
+}
+
+// Recursively resolve a BOM into a flat list of { item, qty, depth }.
+// Only LEAF items (no BOM of their own) are included — intermediate assemblies
+// are expanded into their own sub-components and not deducted directly.
+function resolveBom(parentId, multiplier, visited = new Set()) {
+  if (visited.has(parentId)) return []; // circular reference guard
+  visited.add(parentId);
+  const lines = getBomLines(parentId);
+  const result = [];
+  lines.forEach(line => {
+    const child = inventory.find(i => i.id === line.child_id);
+    if (!child) return;
+    const totalQty = line.quantity * multiplier;
+    if (hasBom(child.id)) {
+      // Intermediate assembly — recurse, don't add this item itself
+      const nested = resolveBom(child.id, totalQty, new Set(visited));
+      result.push(...nested);
+    } else {
+      // Leaf component — add to deduction list
+      result.push({ item: child, qty: totalQty, depth: visited.size - 1 });
+    }
+  });
+  return result;
+}
+
+// Merge resolved BOM lines — combine duplicate items, summing qty
+function mergeBomLines(lines) {
+  const map = new Map();
+  lines.forEach(({ item, qty, depth }) => {
+    if (map.has(item.id)) {
+      map.get(item.id).qty += qty;
+    } else {
+      map.set(item.id, { item, qty, depth });
+    }
+  });
+  return [...map.values()];
+}
+
+// Build the enriched component list for logging — includes parent_path and depth
+// so the checkout log can reconstruct the BOM tree without referencing live BOM data.
+// parentPath = full chain of ancestor assembly names, e.g. "Top Asm > Sub Asm A"
+function resolveLogComponents(parentId, multiplier, parentPath, depth, visited = new Set()) {
+  if (visited.has(parentId)) return [];
+  visited.add(parentId);
+  const lines  = getBomLines(parentId);
+  const result = [];
+  lines.forEach(line => {
+    const child = inventory.find(i => i.id === line.child_id);
+    if (!child) return;
+    const qty = line.quantity * multiplier;
+    if (hasBom(child.id)) {
+      // Recurse — extend the path with this sub-assembly's name
+      const childPath = parentPath + ' > ' + child.name;
+      result.push(...resolveLogComponents(child.id, qty, childPath, depth + 1, new Set(visited)));
+    } else {
+      result.push({
+        name:               child.name,
+        supplier_part:      child.supplier_part || '',
+        location:           child.location      || '',
+        qty_deducted:       qty,
+        sub_assembly_name:  parentPath,   // full path to immediate parent
+        depth,
+      });
+    }
+  });
+  return result;
+}
+// Calculate the total BOM cost for one unit of an item by recursing through
+// all BOM lines. Always recalculates from leaf unit_costs — never uses a
+// child's stored unit_cost, so stale cached values don't cause wrong totals.
+function calcBomCost(parentId, visited = new Set()) {
+  if (visited.has(parentId)) return 0; // cycle guard
+  visited.add(parentId);
+  const lines = getBomLines(parentId);
+  if (!lines.length) return 0;
+  return lines.reduce((sum, line) => {
+    const child = inventory.find(i => i.id === line.child_id);
+    if (!child) return sum;
+    // If child has its own BOM, recurse to get its true cost from leaves
+    const childCost = hasBom(child.id)
+      ? calcBomCost(child.id, new Set(visited))
+      : (child.unit_cost || 0);
+    return sum + childCost * line.quantity;
+  }, 0);
+}
+
+// Walk upward through all ancestor assemblies that contain changedItemId
+// anywhere in their BOM tree, recalculate each one's cost, and persist changes.
+async function propagateBomCosts(changedItemId) {
+  // Build child→parents map from current boms array
+  const parentMap = new Map();
+  boms.forEach(b => {
+    if (!parentMap.has(b.child_id)) parentMap.set(b.child_id, new Set());
+    parentMap.get(b.child_id).add(b.parent_id);
+  });
+
+  // BFS upward to collect all ancestor assembly IDs
+  const toUpdate = new Set();
+  const queue    = [changedItemId];
+  while (queue.length) {
+    const id      = queue.shift();
+    const parents = parentMap.get(id) || new Set();
+    parents.forEach(pid => {
+      if (!toUpdate.has(pid)) {
+        toUpdate.add(pid);
+        queue.push(pid);
+      }
+    });
+  }
+
+  if (!toUpdate.size) return;
+
+  // Recalculate cost for each ancestor and update if it changed
+  const updates = [];
+  toUpdate.forEach(id => {
+    const idx = inventory.findIndex(x => x.id === id);
+    if (idx < 0) return;
+    const newCost = calcBomCost(id);
+    if (newCost > 0 && Math.abs(newCost - (inventory[idx].unit_cost || 0)) > 0.000001) {
+      const updatedItem = { ...inventory[idx], unit_cost: newCost };
+      inventory[idx]    = updatedItem;
+      updates.push(api('update', { item: updatedItem }).catch(() => {}));
+    }
+  });
+
+  if (updates.length) await Promise.all(updates);
+}
+
+// ══════════════════════════════════════════════════════════
+//  Sync & polling
+// ══════════════════════════════════════════════════════════
+function setSyncStatus(state, text) {
+  const dot = document.getElementById('sync-dot');
+  dot.className = 'sync-dot'
+    + (state==='ok' ? ' ok' : state==='syncing' ? ' syncing' : state==='error' ? ' error' : state==='poll' ? ' poll' : '');
+  document.getElementById('sync-text').textContent = text;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('update-toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function syncAll(silent = false) {
+  if (isSyncing) return;
+  isSyncing = true;
+  if (!silent) {
+    setSyncStatus('syncing', 'Loading…');
+    document.getElementById('loading-overlay').style.display = 'flex';
+    document.getElementById('loading-overlay').innerHTML = '<div class="spinner"></div> Loading from Google Sheets…';
+    document.getElementById('inv-table').style.display = 'none';
+    document.getElementById('empty-state').style.display = 'none';
+  }
+  try {
+    const r = await api('getAll+getCats');
+    inventory          = r.items      || [];
+    categories         = r.categories || [];
+    boms               = r.boms       || [];
+    lastKnownTimestamp = r.timestamp  || null;
+    setSyncStatus('ok', 'Synced ' + new Date().toLocaleTimeString());
+    render();
+    if (!silent) {
+      document.getElementById('loading-overlay').style.display = 'none';
+      document.getElementById('inv-table').style.display = 'table';
+    }
+    if (selectedId) renderDetail(selectedId);
+  } catch(err) {
+    setSyncStatus('error', 'Connection failed');
+    if (!silent) {
+      document.getElementById('loading-overlay').innerHTML = `
+        <div style="text-align:center;color:var(--danger)">
+          <div style="font-size:24px;margin-bottom:8px">⊗</div>
+          <div style="font-weight:500;margin-bottom:4px">Could not reach Google Sheets</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${err.message}</div>
+          <button class="btn btn-ghost btn-sm" onclick="manualSync()">Retry</button>
+        </div>`;
+    }
+  } finally { isSyncing = false; }
+}
+
+async function poll() {
+  if (isSyncing) return;
+  try {
+    const r = await api('getLastModified');
+    if (r.last_modified && r.last_modified !== lastKnownTimestamp) {
+      setSyncStatus('poll', 'Updating…');
+      showToast('↻ Sheet updated — refreshing…');
+      await syncAll(true);
+      setSyncStatus('ok', 'Updated ' + new Date().toLocaleTimeString());
+    }
+  } catch(err) { /* silent */ }
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(poll, POLL_INTERVAL_MS);
+}
+
+function manualSync() {
+  clearInterval(pollTimer);
+  syncAll(false).then(startPolling);
+}
+
+// ══════════════════════════════════════════════════════════
+//  Helpers
+// ══════════════════════════════════════════════════════════
+function catColor(name) {
+  const c = categories.find(x => x.name === name);
+  return c ? c.color : '#78716c';
+}
+
+function linkifyNotes(text) {
+  if (!text) return '';
+  return text.replace(/(https?:\/\/[^\s,;)<>"]+)/g, url => {
+    const d = url.length > 40 ? url.substring(0,38)+'…' : url;
+    return `<a href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${d}</a>`;
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+//  Filtering & sorting
+// ══════════════════════════════════════════════════════════
+
+// Rebuild the BOM filter dropdown from current inventory+boms
+function renderBomFilterSelect() {
+  const sel  = document.getElementById('bom-filter-select');
+  const prev = sel.value;
+  // Only list items that have a BOM (are assemblies)
+  const assemblies = inventory.filter(i => hasBom(i.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  sel.innerHTML = '<option value="">All Items</option>'
+    + assemblies.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
+  if (prev && assemblies.find(i => String(i.id) === String(prev))) sel.value = prev;
+}
+
+function onBomFilterChange() {
+  const bomId = document.getElementById('bom-filter-select').value;
+  const label = document.getElementById('bom-subasm-label');
+  label.style.display = bomId ? 'flex' : 'none';
+  if (!bomId) document.getElementById('bom-subasm-check').checked = false;
+  renderTable();
+}
+
+// Return the set of item IDs that belong to a given assembly BOM.
+// includeSubAsm=false → leaf components only (no BOM of their own)
+// includeSubAsm=true  → leaves + intermediate sub-assemblies
+function getBomMemberIds(parentId, includeSubAsm, visited = new Set()) {
+  if (visited.has(parentId)) return new Set();
+  visited.add(parentId);
+  const result = new Set();
+  getBomLines(parentId).forEach(line => {
+    const child = inventory.find(i => i.id === line.child_id);
+    if (!child) return;
+    if (hasBom(child.id)) {
+      if (includeSubAsm) result.add(child.id);
+      // Always recurse to collect leaves from nested BOMs
+      getBomMemberIds(child.id, includeSubAsm, new Set(visited))
+        .forEach(id => result.add(id));
+    } else {
+      result.add(child.id);
+    }
+  });
+  return result;
+}
+
+function getFiltered() {
+  const q             = document.getElementById('search').value.toLowerCase().trim();
+  const bomId         = document.getElementById('bom-filter-select').value;
+  const includeSubAsm = document.getElementById('bom-subasm-check').checked;
+  sortCol = document.getElementById('sort-select').value;
+
+  // If a BOM is selected, pre-compute the matching ID set
+  const bomMemberIds = bomId ? getBomMemberIds(Number(bomId), includeSubAsm) : null;
+
+  return inventory
+    .filter(i => {
+      if (currentView === 'low')     return i.min > 0 && i.qty <= i.min;
+      if (currentView === 'bom')     return hasBom(i.id);
+      if (currentView === 'nobom')   return !hasBom(i.id);
+      if (currentView === 'history') return false;
+      return true;
+    })
+    .filter(i => bomMemberIds ? bomMemberIds.has(i.id) : true)
+    .filter(i => activeCats.size > 0 ? activeCats.has(i.category) : true)
+    .filter(i => !q || (i.name+(i.supplier_part||'')+i.category+(i.location||'')+(i.supplier||'')).toLowerCase().includes(q))
+    .sort((a,b) => {
+      const av = a[sortCol]??'', bv = b[sortCol]??'';
+      return (typeof av==='string' ? av.localeCompare(bv) : av-bv) * sortDir;
+    });
+}
+
+function sortBy(col) {
+  if (sortCol===col) sortDir*=-1; else { sortCol=col; sortDir=1; }
+  document.getElementById('sort-select').value = col;
+  renderTable();
+}
+
+function setView(v, el) {
+  currentView = v;
+  document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
+  if (el) el.classList.add('active');
+  if (v === 'history') {
+    showHistoryPanel();
+    loadHistory();
+  } else {
+    hideHistoryPanel();
+    renderTable();
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  Render
+// ══════════════════════════════════════════════════════════
+function renderStats() {
+  const low = inventory.filter(i=>i.min>0&&i.qty<i.min).length;
+  const out = inventory.filter(i=>i.min>0&&i.qty===0).length;
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat-cell"><div class="stat-label">Total SKUs</div><div class="stat-val">${inventory.length}</div></div>
+    <div class="stat-cell"><div class="stat-label">Low Stock</div><div class="stat-val ${low>0?'warn':''}">${low}</div></div>
+    <div class="stat-cell"><div class="stat-label">Out of Stock</div><div class="stat-val ${out>0?'warn':''}">${out}</div></div>`;
+}
+
+function renderAlerts() {
+  const p = document.getElementById('alerts-panel');
+  let h='';
+  inventory.filter(i=>i.qty===0&&i.min>0).slice(0,2)
+    .forEach(i=>h+=`<div class="alert-row">⊗ <b>${i.name}</b> — out of stock (${i.location||'no location'})</div>`);
+  inventory.filter(i=>i.min>0&&i.qty>0&&i.qty<i.min).slice(0,3)
+    .forEach(i=>h+=`<div class="alert-row alert-warn">⚠ <b>${i.name}</b> — ${i.qty} left (min: ${i.min})</div>`);
+  p.innerHTML=h; p.style.display=h?'block':'none';
+}
+
+function renderCatTags() {
+  const inUse=new Set(inventory.map(i=>i.category));
+  const known=new Set(categories.map(c=>c.name));
+  const all=[...new Set([...known,...inUse])].sort();
+  const container=document.getElementById('cat-tags');
+  container.innerHTML='';
+  all.forEach(cat=>{
+    const btn=document.createElement('button');
+    btn.className='cat-tag'+(activeCats.has(cat)?' active':'');
+    btn.innerHTML=`<span class="cat-dot" style="background:${catColor(cat)}"></span>${cat}`;
+    btn.onclick=()=>{if(activeCats.has(cat))activeCats.delete(cat);else activeCats.add(cat);renderCatTags();renderTable();};
+    container.appendChild(btn);
+  });
+}
+
+function renderCatSelect() {
+  const sel=document.getElementById('f-cat');
+  const prev=sel.value;
+  sel.innerHTML=categories.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  if(prev&&categories.find(c=>c.name===prev))sel.value=prev;
+}
+
+function renderTable() {
+  const items=getFiltered();
+  const tbody=document.getElementById('inv-body');
+  document.getElementById('empty-state').style.display=items.length?'none':'block';
+  if(!items.length){tbody.innerHTML='';return;}
+  tbody.innerHTML=items.map(item=>{
+    const pct=item.min>0?Math.min(100,(item.qty/item.min)*100):100;
+    const fill=item.qty===0&&item.min>0?'var(--danger)':item.qty<item.min&&item.min>0?'var(--warn)':'var(--accent)';
+    const qc=item.qty===0&&item.min>0?'low':item.qty<item.min&&item.min>0?'warn':'ok';
+    const col=catColor(item.category);
+    const bomBadge=hasBom(item.id)?'<span class="badge badge-bom">BOM</span>':'';
+    const notesHtml=item.notes
+      ?`<div class="notes-cell">${linkifyNotes(item.notes)}</div>`
+      :'<span style="color:var(--text3)">—</span>';
+    return `<tr onclick="selectRow(${item.id})" data-id="${item.id}" class="${selectedId===item.id?'selected':''}">
+      <td class="mono">${item.supplier_part||'—'}</td>
+      <td style="font-weight:500">${item.name}${bomBadge}</td>
+      <td><span class="badge badge-cat"><span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>${item.category}</span></td>
+      <td><div class="stock-bar-wrap">
+        <span class="qty ${qc}">${Number(item.qty).toLocaleString()}</span>
+        <div class="stock-bar"><div class="stock-fill" style="width:${pct}%;background:${fill}"></div></div>
+      </div></td>
+      <td><span class="location-pill">${item.location||'—'}</span></td>
+      <td class="mono">${hasBom(item.id)
+        ? `<span style="color:var(--accent)" title="Calculated from BOM">$${calcBomCost(item.id).toFixed(3)}</span>`
+        : `$${Number(item.unit_cost||0).toFixed(3)}`
+      }</td>
+      <td style="color:var(--text2)">${item.supplier||'—'}</td>
+      <td>${notesHtml}</td>
+      <td class="actions-col"><div class="action-btns">
+        ${hasBom(item.id)
+          ? `<button class="btn btn-warn btn-sm" onclick="openBomCheckout(${item.id},event)">↑ BOM Out</button>
+             <button class="btn btn-ghost btn-sm" onclick="openAdj(${item.id},event)">± Adjust</button>`
+          : `<button class="btn btn-ghost btn-sm" onclick="openAdj(${item.id},event)">± Adjust</button>`}
+        <button class="btn btn-ghost btn-sm" onclick="openEditModal(${item.id},event)">Edit</button>
+        <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteItem(${item.id},event)">Del</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function render() {
+  renderStats(); renderAlerts(); renderCatTags(); renderCatSelect(); renderBomFilterSelect(); renderTable();
+}
+
+// ══════════════════════════════════════════════════════════
+//  Detail panel
+// ══════════════════════════════════════════════════════════
+function selectRow(id) {
+  if(selectedId===id){selectedId=null;document.getElementById('detail-panel').classList.add('closed');}
+  else{selectedId=id;renderDetail(id);document.getElementById('detail-panel').classList.remove('closed');}
+  renderTable();
+}
+
+function renderDetail(id) {
+  const i=inventory.find(x=>x.id===id); if(!i)return;
+  const pct=i.min>0?Math.round((i.qty/i.min)*100):100;
+  const notesHtml=i.notes
+    ?`<div class="detail-section">Notes</div><div style="font-size:12px;color:var(--text2);line-height:1.6">${linkifyNotes(i.notes)}</div>`:'';
+
+  // BOM section
+  const bomLines=getBomLines(id);
+  let bomHtml='';
+  if(bomLines.length){
+    const bomTotal=calcBomCost(id);
+    bomHtml=`<div class="detail-section" style="display:flex;justify-content:space-between;align-items:baseline">
+      <span>Bill of Materials</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--accent)">$${bomTotal.toFixed(4)} / unit</span>
+    </div>`;
+    bomLines.forEach(line=>{
+      const child=inventory.find(x=>x.id===line.child_id);
+      const name=child?child.name:`ID ${line.child_id} (missing)`;
+      const hasNested=child&&hasBom(child.id);
+      const lineCost=child?(child.unit_cost||0)*line.quantity:0;
+      bomHtml+=`<div class="detail-bom-line">
+        <span>${name}${hasNested?'<span class="badge badge-bom" style="margin-left:4px">BOM</span>':''}</span>
+        <span style="display:flex;gap:8px;align-items:baseline">
+          <span class="detail-bom-qty">× ${line.quantity}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">$${lineCost.toFixed(4)}</span>
+        </span>
+      </div>`;
+    });
+  }
+
+  document.getElementById('detail-content').innerHTML=`
+    <div class="detail-header"><div>
+      <div class="detail-part">${i.supplier_part||i.part||'—'}</div>
+      <div class="detail-name">${i.name}</div>
+    </div><button class="close-btn" onclick="selectRow(${id})">✕</button></div>
+    <div class="detail-body">
+      <div class="detail-section">Stock</div>
+      <div class="detail-row"><span class="detail-key">Quantity</span><span class="detail-val" style="color:${i.min>0&&i.qty<i.min?'var(--warn)':'var(--accent)'}">${Number(i.qty).toLocaleString()}</span></div>
+      <div class="detail-row"><span class="detail-key">Min Level</span><span class="detail-val">${i.min}</span></div>
+      <div class="detail-row"><span class="detail-key">Stock %</span><span class="detail-val">${pct}%</span></div>
+      <div class="detail-section">Details</div>
+      <div class="detail-row"><span class="detail-key">Category</span><span class="detail-val">${i.category}</span></div>
+      <div class="detail-row"><span class="detail-key">Location</span><span class="detail-val">${i.location||'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Unit Cost</span><span class="detail-val">${
+        hasBom(id)
+          ? `<span style="color:var(--accent)" title="Calculated from BOM">$${calcBomCost(id).toFixed(4)}</span>`
+          : `$${Number(i.unit_cost||0).toFixed(4)}`
+      }</span></div>
+      <div class="detail-section">Supplier</div>
+      <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${i.supplier||'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Part #</span><span class="detail-val">${i.supplier_part||'—'}</span></div>
+      ${bomHtml}${notesHtml}
+    </div>
+    <div class="detail-actions">
+      ${hasBom(id)
+        ?`<button class="btn btn-warn btn-sm" style="flex:1" onclick="openBomCheckout(${id},null)">↑ BOM Checkout</button>
+           <button class="btn btn-ghost btn-sm" onclick="openAdj(${id},null)">± Adjust</button>`
+        :`<button class="btn btn-primary btn-sm" style="flex:1" onclick="openAdj(${id},null)">± Adjust Stock</button>`}
+      ${hasBom(id)?`<button class="btn btn-ghost btn-sm" onclick="printPickList(${id})">⎙ Pick List</button>`:''}
+      <button class="btn btn-ghost btn-sm" onclick="openBomEditor(${id})">◈ BOM</button>
+      <button class="btn btn-ghost btn-sm" onclick="openEditModal(${id},null)">Edit</button>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════
+//  Add / Edit Modal
+// ══════════════════════════════════════════════════════════
+function openModal() {
+  editId = null;
+  document.getElementById('modal-title').textContent = 'Add Component';
+  document.getElementById('modal-save').textContent  = 'Add Item';
+  document.getElementById('modal-err').textContent   = '';
+  ['part','name','qty','min','loc','cost','supplier','supplier-part','notes']
+    .forEach(f => { const e = document.getElementById('f-'+f); if (e) e.value = ''; });
+  document.getElementById('modal-copy-btn').style.display = 'none';
+  renderCatSelect();
+  document.getElementById('modal').classList.add('open');
+}
+
+function openEditModal(id, e) {
+  if (e) e.stopPropagation();
+  editId = id;
+  const i = inventory.find(x => x.id === id); if (!i) return;
+  document.getElementById('modal-title').textContent = 'Edit Component';
+  document.getElementById('modal-save').textContent  = 'Save Changes';
+  document.getElementById('modal-err').textContent   = '';
+  renderCatSelect();
+  document.getElementById('f-part').value          = i.part          || '';
+  document.getElementById('f-name').value          = i.name;
+  document.getElementById('f-cat').value           = i.category;
+  document.getElementById('f-qty').value           = i.qty;
+  document.getElementById('f-min').value           = i.min;
+  document.getElementById('f-loc').value           = i.location      || '';
+  document.getElementById('f-cost').value          = i.unit_cost     || 0;
+  document.getElementById('f-supplier').value      = i.supplier      || '';
+  document.getElementById('f-supplier-part').value = i.supplier_part || '';
+  document.getElementById('f-notes').value         = i.notes         || '';
+  document.getElementById('modal-copy-btn').style.display = 'inline-flex';
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal(){ copySourceId = null; document.getElementById('modal').classList.remove('open'); }
+
+// Switches the open edit modal into "new item" mode, pre-filled with current form values
+let copySourceId = null; // set when copying so saveItem can duplicate the BOM
+
+function copyAsNew() {
+  copySourceId = editId; // remember which item we're copying from
+  editId = null;
+  document.getElementById('modal-title').textContent = 'Copy Component';
+  document.getElementById('modal-save').textContent  = 'Add Copy';
+  document.getElementById('modal-err').textContent   = '';
+  document.getElementById('modal-copy-btn').style.display = 'none';
+  const currentName = document.getElementById('f-name').value.trim();
+  if (currentName && !currentName.startsWith('Copy of ')) {
+    document.getElementById('f-name').value = 'Copy of ' + currentName;
+  }
+  document.getElementById('f-qty').value = 0;
+}
+
+async function saveItem() {
+  const name=document.getElementById('f-name').value.trim();
+  if(!name){document.getElementById('modal-err').textContent='Component name is required.';return;}
+  const item={
+    part:document.getElementById('f-part').value.trim(),
+    name,
+    category:document.getElementById('f-cat').value,
+    qty:parseInt(document.getElementById('f-qty').value)||0,
+    min:parseInt(document.getElementById('f-min').value)||0,
+    location:document.getElementById('f-loc').value.trim(),
+    unit_cost:parseFloat(document.getElementById('f-cost').value)||0,
+    supplier:document.getElementById('f-supplier').value.trim(),
+    supplier_part:document.getElementById('f-supplier-part').value.trim(),
+    notes:document.getElementById('f-notes').value.trim(),
+  };
+  const btn=document.getElementById('modal-save');
+  btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';
+  try {
+    if(editId){
+      item.id=editId;
+      await api('update',{item});
+      const idx=inventory.findIndex(x=>x.id===editId);
+      if(idx>=0)inventory[idx]={...inventory[idx],...item};
+      // Propagate cost change upward to all ancestor BOM assemblies
+      await propagateBomCosts(editId);
+    } else {
+      const r=await api('add',{item});
+      const newItem = r.item||{...item,id:Date.now()};
+      inventory.push(newItem);
+      // If this was a copy and the source had a BOM, duplicate it to the new item
+      if(copySourceId){
+        const srcLines = getBomLines(copySourceId);
+        if(srcLines.length){
+          const lines = srcLines.map(l=>({child_id:l.child_id,quantity:l.quantity}));
+          await api('saveBOM',{parent_id:newItem.id,lines});
+          boms.push(...lines.map(l=>({parent_id:newItem.id,child_id:l.child_id,quantity:l.quantity})));
+        }
+        copySourceId = null;
+      }
+    }
+    closeModal();render();
+    if(selectedId)renderDetail(selectedId);
+    setSyncStatus('ok','Saved '+new Date().toLocaleTimeString());
+  } catch(err){document.getElementById('modal-err').textContent='Error: '+err.message;}
+  finally{btn.disabled=false;btn.textContent=editId?'Save Changes':'Add Item';}
+}
+
+// ══════════════════════════════════════════════════════════
+//  Adjust Modal (manual, single item)
+// ══════════════════════════════════════════════════════════
+function openAdj(id,e) {
+  if(e)e.stopPropagation();
+  adjId=id;
+  const i=inventory.find(x=>x.id===id);
+  document.getElementById('adj-title').textContent='Adjust — '+i.name.substring(0,28);
+  document.getElementById('adj-info').textContent='Current: '+Number(i.qty).toLocaleString()+' units';
+  document.getElementById('adj-qty').value=1;
+  document.getElementById('adj-note').value='';
+  document.getElementById('adj-action').value='add';
+  document.getElementById('adj-err').textContent='';
+  document.getElementById('adj-modal').classList.add('open');
+}
+
+function closeAdjModal(){document.getElementById('adj-modal').classList.remove('open');}
+
+async function applyAdjust() {
+  const qty=parseInt(document.getElementById('adj-qty').value)||0;
+  const action=document.getElementById('adj-action').value;
+  const btn=document.getElementById('adj-save');
+  btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';
+  try {
+    const r=await api('adjustQty',{id:adjId,action,qty});
+    const idx=inventory.findIndex(x=>x.id===adjId);
+    if(idx>=0){
+      const c=inventory[idx].qty;
+      inventory[idx].qty=action==='add'?c+qty:action==='remove'?Math.max(0,c-qty):qty;
+      if(r.newQty!==undefined)inventory[idx].qty=r.newQty;
+    }
+    closeAdjModal();render();
+    if(selectedId===adjId)renderDetail(adjId);
+    setSyncStatus('ok','Saved '+new Date().toLocaleTimeString());
+  } catch(err){document.getElementById('adj-err').textContent='Error: '+err.message;}
+  finally{btn.disabled=false;btn.textContent='Apply';}
+}
+
+// ══════════════════════════════════════════════════════════
+//  BOM Editor Modal
+// ══════════════════════════════════════════════════════════
+function openBomEditor(id) {
+  bomEditId=id;
+  const item=inventory.find(x=>x.id===id);
+  document.getElementById('bom-modal-title').textContent='BOM — '+item.name;
+  document.getElementById('bom-modal-sub').textContent='Components consumed per unit checked out';
+  document.getElementById('bom-modal-err').textContent='';
+  renderBomLines();
+  document.getElementById('bom-modal').classList.add('open');
+}
+
+function closeBomModal() { bomWorkingCopy = null; document.getElementById('bom-modal').classList.remove('open'); }
+
+function renderBomLines() {
+  ensureBomWorkingCopy();
+  const lines = bomWorkingCopy.lines;
+  const container = document.getElementById('bom-lines');
+
+  if (!lines.length) {
+    container.innerHTML = `<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px 0">No components yet — click Add Component below</div>`;
+    renderBomCostFooter(0);
+    return;
+  }
+
+  container.innerHTML = lines.map((line, idx) => {
+    const child = inventory.find(i => i.id === line.child_id);
+    const displayName = child ? child.name + (child.supplier_part ? ' (' + child.supplier_part + ')' : '') : '— Select component —';
+    const lineCost = child ? (hasBom(child.id) ? calcBomCost(child.id) : (child.unit_cost || 0)) * line.quantity : 0;
+    const costStr = child && lineCost > 0
+      ? `<span style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">$${lineCost.toFixed(4)}</span>`
+      : `<span style="font-size:11px;color:var(--text3)">—</span>`;
+    return `<div class="bom-line" id="bom-line-${idx}" style="grid-template-columns:1fr 70px 60px 32px">
+      <div class="bom-picker-wrap" id="picker-wrap-${idx}">
+        <button class="bom-picker-display${child ? ' selected-val' : ''}" id="picker-btn-${idx}"
+          onclick="toggleBomPicker(${idx},event)">
+          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${displayName}</span>
+          <span style="flex-shrink:0;color:var(--text3);font-size:10px">▾</span>
+        </button>
+        <div class="bom-picker-dropdown" id="picker-drop-${idx}" style="display:none">
+          <div class="bom-picker-search-row">
+            <input class="bom-picker-search" id="picker-search-${idx}" placeholder="Search…"
+              oninput="filterBomPicker(${idx})" onclick="event.stopPropagation()"/>
+            <select class="bom-picker-cat" id="picker-cat-${idx}"
+              onchange="filterBomPicker(${idx})" onclick="event.stopPropagation()">
+              <option value="">All categories</option>
+              ${[...new Set(inventory.filter(i=>i.id!==bomEditId).map(i=>i.category))].sort()
+                .map(c=>`<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+          <div class="bom-picker-list" id="picker-list-${idx}"></div>
+        </div>
+      </div>
+      <input type="number" min="1" id="bom-qty-${idx}" value="${line.quantity}"
+        onchange="updateBomLine(${idx},'quantity',this.value);renderBomLines()"
+        oninput="updateBomLine(${idx},'quantity',this.value);renderBomLines()"/>
+      ${costStr}
+      <button class="bom-remove-btn" onclick="removeBomLine(${idx})">✕</button>
+    </div>`;
+  }).join('');
+
+  // Populate each picker list with full item list initially
+  lines.forEach((line, idx) => filterBomPicker(idx));
+
+  // Recompute running total
+  const total = lines.reduce((sum, line) => {
+    const child = inventory.find(i => i.id === line.child_id);
+    if (!child) return sum;
+    const cost = hasBom(child.id) ? calcBomCost(child.id) : (child.unit_cost || 0);
+    return sum + cost * line.quantity;
+  }, 0);
+  renderBomCostFooter(total);
+}
+
+// Build/filter the option list inside a picker dropdown
+function filterBomPicker(idx) {
+  const searchEl = document.getElementById('picker-search-' + idx);
+  const catEl    = document.getElementById('picker-cat-' + idx);
+  const listEl   = document.getElementById('picker-list-' + idx);
+  if (!listEl) return;
+
+  const q   = (searchEl ? searchEl.value : '').toLowerCase().trim();
+  const cat = catEl ? catEl.value : '';
+
+  const line = bomWorkingCopy ? bomWorkingCopy.lines[idx] : null;
+
+  const filtered = inventory
+    .filter(i => i.id !== bomEditId)
+    .filter(i => !cat || i.category === cat)
+    .filter(i => !q || (i.name + (i.supplier_part || '') + i.category).toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  if (!filtered.length) {
+    listEl.innerHTML = `<div class="bom-picker-empty">No components match</div>`;
+    return;
+  }
+
+  listEl.innerHTML = filtered.map(item => {
+    const isActive = line && line.child_id === item.id;
+    const cost = hasBom(item.id) ? calcBomCost(item.id) : (item.unit_cost || 0);
+    const costLabel = cost > 0 ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:auto">$${cost.toFixed(4)}</span>` : '';
+    const catDot = `<span style="width:7px;height:7px;border-radius:50%;background:${catColor(item.category)};display:inline-block;flex-shrink:0"></span>`;
+    return `<div class="bom-picker-opt${isActive ? ' active' : ''}"
+      onclick="selectBomPickerItem(${idx},${item.id},event)">
+      ${catDot}
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.name}${item.supplier_part ? ' <span style="color:var(--text3)">(' + item.supplier_part + ')</span>' : ''}</span>
+      ${costLabel}
+    </div>`;
+  }).join('');
+}
+
+let openBomPicker = null;
+
+function toggleBomPicker(idx, e) {
+  e.stopPropagation();
+  const drop = document.getElementById('picker-drop-' + idx);
+  if (!drop) return;
+  if (openBomPicker === idx) {
+    drop.style.display = 'none';
+    openBomPicker = null;
+    return;
+  }
+  if (openBomPicker !== null) {
+    const prev = document.getElementById('picker-drop-' + openBomPicker);
+    if (prev) prev.style.display = 'none';
+  }
+  drop.style.display = 'block';
+  openBomPicker = idx;
+  const s = document.getElementById('picker-search-' + idx);
+  if (s) setTimeout(() => s.focus(), 50);
+}
+
+function selectBomPickerItem(idx, itemId, e) {
+  e.stopPropagation();
+  updateBomLine(idx, 'child_id', itemId);
+  // Close picker
+  const drop = document.getElementById('picker-drop-' + idx);
+  if (drop) drop.style.display = 'none';
+  openBomPicker = null;
+  // Re-render to update display name and cost
+  renderBomLines();
+}
+
+// Close pickers when clicking outside
+document.addEventListener('click', () => {
+  if (openBomPicker !== null) {
+    const drop = document.getElementById('picker-drop-' + openBomPicker);
+    if (drop) drop.style.display = 'none';
+    openBomPicker = null;
+  }
+});
+
+function renderBomCostFooter(total) {
+  const footer = document.getElementById('bom-cost-footer');
+  if (!footer) return;
+  footer.innerHTML = total > 0
+    ? `<span style="color:var(--text3)">Estimated unit cost:</span> <span style="color:var(--accent);font-family:var(--mono)">$${total.toFixed(4)}</span>`
+    : `<span style="color:var(--text3)">Add components with known unit costs to see estimated total</span>`;
+}
+
+// Working copy lives independently of the boms array while editing
+let bomWorkingCopy = null;
+
+function ensureBomWorkingCopy() {
+  if (bomWorkingCopy === null || bomWorkingCopy.parentId !== bomEditId) {
+    bomWorkingCopy = {
+      parentId: bomEditId,
+      lines: boms
+        .filter(b => b.parent_id === bomEditId)
+        .map(l => ({ ...l }))
+    };
+  }
+}
+
+function addBomLine() {
+  ensureBomWorkingCopy();
+  bomWorkingCopy.lines.push({ parent_id: bomEditId, child_id: 0, quantity: 1 });
+  renderBomLines();
+}
+
+function removeBomLine(idx) {
+  ensureBomWorkingCopy();
+  // Flush DOM values before splicing so we don't lose edits
+  flushBomDomToWorkingCopy();
+  bomWorkingCopy.lines.splice(idx, 1);
+  renderBomLines();
+}
+
+function updateBomLine(idx, field, val) {
+  ensureBomWorkingCopy();
+  bomWorkingCopy.lines[idx][field] = field === 'quantity' ? Number(val) || 1 : Number(val);
+}
+
+function flushBomDomToWorkingCopy() {
+  if (!bomWorkingCopy) return;
+  bomWorkingCopy.lines.forEach((line, idx) => {
+    const inp = document.getElementById('bom-qty-' + idx);
+    if (inp) line.quantity = Number(inp.value) || 1;
+    // child_id is kept up to date via updateBomLine() calls on selection, no DOM read needed
+  });
+}
+
+async function saveBom() {
+  ensureBomWorkingCopy();
+  flushBomDomToWorkingCopy();
+  const lines = bomWorkingCopy.lines;
+  const validLines = lines.filter(l => l.child_id > 0 && l.quantity > 0);
+  // Check for duplicates
+  const childIds = validLines.map(l => l.child_id);
+  if (new Set(childIds).size !== childIds.length) {
+    document.getElementById('bom-modal-err').textContent = 'Duplicate components — each item can only appear once.';
+    return;
+  }
+  const btn = document.getElementById('bom-save-btn');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
+  try {
+    await api('saveBOM', { parent_id: bomEditId, lines: validLines.map(l => ({ child_id: l.child_id, quantity: l.quantity })) });
+    // Update local boms
+    boms = boms.filter(b => b.parent_id !== bomEditId);
+    boms.push(...validLines.map(l => ({ parent_id: bomEditId, child_id: l.child_id, quantity: l.quantity })));
+
+    // Update cost of this assembly and all ancestor assemblies that contain it
+    const bomTotal = calcBomCost(bomEditId);
+    if (bomTotal > 0) {
+      const parentIdx = inventory.findIndex(x => x.id === bomEditId);
+      if (parentIdx >= 0) {
+        const updatedItem = { ...inventory[parentIdx], unit_cost: bomTotal };
+        await api('update', { item: updatedItem });
+        inventory[parentIdx] = updatedItem;
+      }
+    }
+    await propagateBomCosts(bomEditId);
+
+    bomWorkingCopy = null;
+    closeBomModal();
+    render();
+    if (selectedId) renderDetail(selectedId);
+    setSyncStatus('ok', 'BOM saved ' + new Date().toLocaleTimeString());
+  } catch(err) { document.getElementById('bom-modal-err').textContent = 'Error: ' + err.message; }
+  finally { btn.disabled = false; btn.textContent = 'Save BOM'; }
+}
+
+// ══════════════════════════════════════════════════════════
+//  BOM Checkout Modal
+// ══════════════════════════════════════════════════════════
+function openBomCheckout(id,e) {
+  if(e)e.stopPropagation();
+  const item=inventory.find(x=>x.id===id);
+
+  document.getElementById('bom-co-sub').textContent      = item.name;
+  document.getElementById('bom-co-err').textContent      = '';
+  document.getElementById('bom-co-job').value            = '';
+  document.getElementById('bom-co-jobname').value        = '';
+  document.getElementById('bom-co-qty-input').value      = 1;
+  document.getElementById('bom-co-qty-input').oninput    = () => refreshBomCheckoutPreview(id);
+  document.getElementById('bom-co-confirm').disabled     = true;
+  document.getElementById('bom-co-print').disabled       = true;
+
+  refreshBomCheckoutPreview(id);
+  document.getElementById('bom-checkout-modal').classList.add('open');
+}
+
+// Enable/disable confirm buttons based on job name being filled
+function validateBomCheckout() {
+  const hasJobName   = document.getElementById('bom-co-jobname').value.trim().length > 0;
+  const hasJobNumber = document.getElementById('bom-co-job').value.trim().length > 0;
+  const valid = hasJobName && hasJobNumber;
+  document.getElementById('bom-co-confirm').disabled = !valid;
+  document.getElementById('bom-co-print').disabled   = !valid;
+}
+
+function refreshBomCheckoutPreview(parentId) {
+  const qtyInput   = document.getElementById('bom-co-qty-input');
+  const checkoutQty = Math.max(1, parseInt(qtyInput?.value) || 1);
+
+  // Flat leaf list for the actual API deduction (unchanged)
+  const resolved = resolveBom(parentId, checkoutQty);
+  const merged   = mergeBomLines(resolved);
+  bomCoData = { parentId, checkoutQty, merged };
+
+  const list = document.getElementById('bom-checkout-list');
+  const warn = document.getElementById('bom-co-warning');
+  const btn  = document.getElementById('bom-co-confirm');
+
+  // Build tree HTML recursively — each BOM assembly shown as a header,
+  // its direct leaf components indented below it
+  let anyInsufficient = false;
+
+  function renderTreeLevel(pid, multiplier, depth) {
+    const lines = getBomLines(pid);
+    let html = '';
+    const indent = depth * 18; // px indent per level
+
+    lines.forEach(line => {
+      const child = inventory.find(i => i.id === line.child_id);
+      if (!child) return;
+      const qty = line.quantity * multiplier;
+
+      if (hasBom(child.id)) {
+        // Sub-assembly header
+        html += `<div class="bom-co-assembly" style="margin-left:${indent}px">
+          <span class="bom-co-assembly-icon">◈</span>
+          <span style="flex:1">${child.name}</span>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">×${qty}</span>
+        </div>`;
+        // Recurse into sub-assembly
+        html += renderTreeLevel(child.id, qty, depth + 1);
+      } else {
+        // Leaf component — find its merged deduction qty for stock display
+        const mergedEntry = merged.find(m => m.item.id === child.id);
+        // For stock display use the qty at this line, not the merged total,
+        // since we want to show per-path quantities
+        const after       = child.qty - qty;
+        const insufficient = after < 0;
+        if (insufficient) anyInsufficient = true;
+        const stockClass  = insufficient ? 'bad' : (child.min > 0 && after < child.min) ? 'warn' : 'ok';
+        html += `<div class="bom-checkout-row ${insufficient ? 'insufficient' : ''}" style="margin-left:${indent}px">
+          <span class="bom-co-name">${child.name}
+            ${child.supplier_part ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:4px">${child.supplier_part}</span>` : ''}
+          </span>
+          <span class="bom-co-qty">−${qty}</span>
+          <span class="bom-co-stock ${stockClass}">${child.qty}→${Math.max(0, after)}</span>
+        </div>`;
+      }
+    });
+    return html;
+  }
+
+  const treeHtml = renderTreeLevel(parentId, checkoutQty, 0);
+  list.innerHTML = treeHtml || '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">No components in BOM</div>';
+
+  if (anyInsufficient) {
+    warn.style.display = 'block';
+    warn.textContent   = '⚠ Some components have insufficient stock. Quantities will be clamped to 0 — you may want to cancel and restock first.';
+    btn.textContent    = 'Checkout Anyway';
+    document.getElementById('bom-co-print').textContent = '⎙ Checkout Anyway & Print';
+  } else {
+    warn.style.display = 'none';
+    btn.textContent    = 'Confirm Checkout';
+    document.getElementById('bom-co-print').textContent = '⎙ Checkout & Print';
+  }
+}
+
+function closeBomCheckout(){
+  document.getElementById('bom-checkout-modal').classList.remove('open');
+  bomCoData=null;
+}
+
+async function confirmBomCheckout(printAfter=false) {
+  if(!bomCoData||!bomCoData.merged.length)return;
+  const confirmBtn = document.getElementById('bom-co-confirm');
+  const printBtn   = document.getElementById('bom-co-print');
+  confirmBtn.disabled=true; confirmBtn.innerHTML='<div class="spinner"></div>';
+  printBtn.disabled=true;
+
+  // Open the print window NOW while we still have the user gesture — browsers
+  // block window.open called after an await (async gap breaks gesture trust)
+  let printWindow = null;
+  if (printAfter) {
+    printWindow = window.open('', '_blank');
+    if (printWindow) printWindow.document.write('<html><body><p style="font-family:sans-serif;padding:32px;color:#666">Preparing pick list…</p></body></html>');
+  }
+
+  try {
+    const jobName    = document.getElementById('bom-co-jobname').value.trim() + ' ' + document.getElementById('bom-co-job').value.trim();
+    const parent     = inventory.find(x => x.id === bomCoData.parentId);
+    const adjustments = bomCoData.merged.map(({item,qty}) => ({
+      id: item.id, action: 'remove', qty
+    }));
+    const logPayload = {
+      job_name:      jobName,
+      assembly_name: parent ? parent.name : '',
+      assembly_id:   bomCoData.parentId,
+      qty_built:     bomCoData.checkoutQty,
+      components:    resolveLogComponents(bomCoData.parentId, bomCoData.checkoutQty, parent ? parent.name : '', 0),
+    };
+
+    // Fire stock deduction and log write in parallel
+    const [r] = await Promise.all([
+      api('batchAdjustQty', { adjustments }),
+      api('logCheckout', logPayload).catch(() => {}), // log failure is non-blocking
+    ]);
+
+    (r.results||[]).forEach(({id,newQty}) => {
+      const idx = inventory.findIndex(x => x.id === id);
+      if (idx >= 0) inventory[idx].qty = newQty;
+    });
+    const snapshotData = { ...bomCoData };
+    closeBomCheckout();
+    render();
+    if (selectedId) renderDetail(selectedId);
+    setSyncStatus('ok', 'BOM checkout saved ' + new Date().toLocaleTimeString());
+    showToast(`↑ Checked out ${snapshotData.checkoutQty}× — ${adjustments.length} components decremented`);
+    if (printAfter && printWindow) {
+      writePickListToWindow(printWindow, snapshotData.parentId, snapshotData.checkoutQty, snapshotData.merged);
+    }
+  } catch(err) {
+    document.getElementById('bom-co-err').textContent = 'Error: ' + err.message;
+    if (printWindow) printWindow.close();
+  }
+  finally {
+    confirmBtn.disabled = false;
+    printBtn.disabled   = false;
+    const hasJob = document.getElementById('bom-co-jobname')?.value.trim().length > 0
+                && document.getElementById('bom-co-job')?.value.trim().length > 0;
+    if (!hasJob) { confirmBtn.disabled = true; printBtn.disabled = true; }
+    const anyInsufficient = bomCoData && bomCoData.merged.some(({item,qty}) => item.qty - qty < 0);
+    confirmBtn.textContent = anyInsufficient ? 'Checkout Anyway' : 'Confirm Checkout';
+    printBtn.textContent   = anyInsufficient ? '⎙ Checkout Anyway & Print' : '⎙ Checkout & Print';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  Category Manager
+// ══════════════════════════════════════════════════════════
+function openCatModal() {
+  document.getElementById('cat-modal-err').textContent='';
+  document.getElementById('new-cat-name').value='';
+  newCatColor=COLOR_PALETTE[0];
+  renderColorPresets();
+  renderCatList();
+  document.getElementById('cat-modal').classList.add('open');
+}
+
+function closeCatModal() {
+  closeAnyPopover();
+  document.getElementById('cat-modal').classList.remove('open');
+}
+
+function renderColorPresets() {
+  document.getElementById('color-presets').innerHTML=COLOR_PALETTE.map(c=>
+    `<div class="color-preset${c===newCatColor?' selected':''}" style="background:${c}" onclick="selectNewColor('${c}')"></div>`
+  ).join('');
+}
+
+function selectNewColor(c){newCatColor=c;renderColorPresets();}
+
+function renderCatList() {
+  const list=document.getElementById('cat-list');
+  if(!categories.length){list.innerHTML='<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px 0">No categories yet</div>';return;}
+  list.innerHTML=categories.map((cat,idx)=>{
+    const count=inventory.filter(i=>i.category===cat.name).length;
+    return `<div class="cat-list-item" id="cat-row-${idx}">
+      <div style="position:relative">
+        <div class="cat-swatch-btn" id="swatch-${idx}" style="background:${cat.color}"
+          onclick="toggleColorPopover(${idx},'${cat.name.replace(/'/g,"\\'")}',event)" title="Change color"></div>
+        <div class="color-popover" id="popover-${idx}">
+          ${COLOR_PALETTE.map(c=>`<div class="color-preset${c===cat.color?' selected':''}" style="background:${c}"
+            onclick="applyCatColor(${idx},'${cat.name.replace(/'/g,"\\'")}','${c}',event)"></div>`).join('')}
+        </div>
+      </div>
+      <span class="cat-name-text" title="${cat.name}">${cat.name}</span>
+      <span class="cat-count">${count}</span>
+      <button class="btn btn-danger btn-xs" id="del-cat-${idx}"
+        onclick="removeCategory(${idx},'${cat.name.replace(/'/g,"\\'")}',event)">Remove</button>
+    </div>`;
+  }).join('');
+}
+
+function closeAnyPopover() {
+  if(openPopover!==null){const el=document.getElementById('popover-'+openPopover);if(el)el.classList.remove('open');openPopover=null;}
+}
+function toggleColorPopover(idx,name,e) {
+  e.stopPropagation();
+  if(openPopover===idx){closeAnyPopover();return;}
+  closeAnyPopover();
+  const el=document.getElementById('popover-'+idx);
+  if(el){el.classList.add('open');openPopover=idx;}
+}
+document.addEventListener('click',()=>closeAnyPopover());
+
+async function applyCatColor(idx,name,color,e) {
+  e.stopPropagation();closeAnyPopover();
+  const swatch=document.getElementById('swatch-'+idx);
+  if(swatch)swatch.style.opacity='0.5';
+  try {
+    await api('updateCat',{oldName:name,name,color});
+    const c=categories.find(x=>x.name===name);if(c)c.color=color;
+    renderCatList();renderCatTags();renderTable();
+    setSyncStatus('ok','Saved '+new Date().toLocaleTimeString());
+  } catch(err){document.getElementById('cat-modal-err').textContent='Error: '+err.message;renderCatList();}
+}
+
+async function addCategory() {
+  const name=document.getElementById('new-cat-name').value.trim();
+  const err=document.getElementById('cat-modal-err');
+  if(!name){err.textContent='Enter a category name.';return;}
+  if(categories.find(c=>c.name.toLowerCase()===name.toLowerCase())){err.textContent='That category already exists.';return;}
+  err.textContent='';
+  const btn=document.getElementById('add-cat-btn');
+  btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';
+  try {
+    await api('addCat',{name,color:newCatColor});
+    categories.push({name,color:newCatColor});
+    document.getElementById('new-cat-name').value='';
+    renderCatList();renderCatTags();renderCatSelect();
+    setSyncStatus('ok','Saved '+new Date().toLocaleTimeString());
+  } catch(err2){document.getElementById('cat-modal-err').textContent='Error: '+err2.message;}
+  finally{btn.disabled=false;btn.textContent='Add';}
+}
+
+async function removeCategory(idx,name,e) {
+  e.stopPropagation();
+  const count=inventory.filter(i=>i.category===name).length;
+  if(!confirm(count>0
+    ?`"${name}" is used by ${count} item${count!==1?'s':''}. Remove it anyway?`
+    :`Remove category "${name}"?`)) return;
+  const btn=document.getElementById('del-cat-'+idx);
+  if(btn){btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';}
+  try {
+    await api('deleteCat',{name});
+    categories.splice(idx,1);
+    renderCatList();renderCatTags();renderCatSelect();
+    setSyncStatus('ok','Saved '+new Date().toLocaleTimeString());
+  } catch(err){document.getElementById('cat-modal-err').textContent='Error: '+err.message;renderCatList();}
+}
+
+// ══════════════════════════════════════════════════════════
+//  Checkout History
+// ══════════════════════════════════════════════════════════
+
+function showHistoryPanel() {
+  document.getElementById('history-panel').style.cssText = 'display:flex;flex-direction:column;flex:1;overflow:hidden;';
+  document.getElementById('stats-bar').style.display    = 'none';
+  document.getElementById('alerts-panel').style.display = 'none';
+  document.querySelector('.table-wrap').style.display   = 'none';
+  document.getElementById('detail-panel').classList.add('closed');
+}
+
+function hideHistoryPanel() {
+  document.getElementById('history-panel').style.display = 'none';
+  document.getElementById('stats-bar').style.display     = '';
+  document.getElementById('alerts-panel').style.display  = '';
+  document.querySelector('.table-wrap').style.display    = '';
+}
+
+async function loadHistory() {
+  document.getElementById('history-loading').style.display = 'block';
+  document.getElementById('history-empty').style.display   = 'none';
+  document.getElementById('history-list').innerHTML        = '';
+  try {
+    const r = await api('getCheckoutLog', { limit: 100 });
+    historyEntries = r.entries || [];
+    const assemblies = [...new Map(historyEntries.map(e => [e.assembly_id, e.assembly_name])).entries()];
+    const sel  = document.getElementById('history-assembly-filter');
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">All assemblies</option>'
+      + assemblies.map(([id, name]) => `<option value="${id}">${name}</option>`).join('');
+    if (prev) sel.value = prev;
+    renderHistoryView();
+  } catch(err) {
+    document.getElementById('history-loading').style.display = 'none';
+    document.getElementById('history-list').innerHTML =
+      `<div style="color:var(--danger);padding:24px;font-size:13px">Error loading history: ${err.message}</div>`;
+  }
+}
+
+function renderHistoryView() {
+  const q       = document.getElementById('history-search').value.toLowerCase().trim();
+  const asmFilt = document.getElementById('history-assembly-filter').value;
+
+  const filtered = historyEntries.filter(e => {
+    if (asmFilt && String(e.assembly_id) !== String(asmFilt)) return false;
+    if (!q) return true;
+    return (e.job_name + e.assembly_name + e.component_name + (e.supplier_part||'') + (e.location||'')).toLowerCase().includes(q);
+  });
+
+  document.getElementById('history-loading').style.display = 'none';
+
+  if (!filtered.length) {
+    document.getElementById('history-empty').style.display = 'block';
+    document.getElementById('history-list').innerHTML      = '';
+    document.getElementById('history-count').textContent   = '';
+    return;
+  }
+  document.getElementById('history-empty').style.display = 'none';
+
+  // Group by event key
+  const groups = [];
+  const seen   = new Map();
+  filtered.forEach(e => {
+    const key = e.timestamp + '||' + e.job_name + '||' + e.assembly_id;
+    if (!seen.has(key)) {
+      const g = { key, timestamp: e.timestamp, job_name: e.job_name,
+                  assembly_name: e.assembly_name, assembly_id: e.assembly_id,
+                  qty_built: e.qty_built, components: [] };
+      seen.set(key, g);
+      groups.push(g);
+    }
+    seen.get(key).components.push(e);
+  });
+
+  document.getElementById('history-count').textContent =
+    `${groups.length} checkout${groups.length !== 1 ? 's' : ''}`;
+
+  document.getElementById('history-list').innerHTML = groups.map((g, gi) => {
+    const ts = new Date(g.timestamp).toLocaleString();
+    return `<div class="hist-event" id="hev-${gi}">
+      <div class="hist-event-header" onclick="toggleHistEvent(${gi})">
+        <span class="hist-chevron">▶</span>
+        <span class="hist-job">${g.job_name}</span>
+        <span class="hist-asm">${g.assembly_name}</span>
+        <span class="hist-built">×${g.qty_built} built</span>
+        <span class="hist-ts">${ts}</span>
+      </div>
+      <div class="hist-detail" id="hev-detail-${gi}">${buildHistoryDetail(g)}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleHistEvent(gi) {
+  document.getElementById('hev-' + gi).classList.toggle('open');
+}
+
+function buildHistoryDetail(group) {
+  if (!group.components.length) {
+    return '<div style="font-size:12px;color:var(--text3);padding:8px">No component data logged.</div>';
+  }
+
+  const hasStructure = group.components.some(c => c.sub_assembly_name);
+
+  if (!hasStructure) {
+    // Old-format: flat list
+    const sorted = [...group.components].sort((a, b) => {
+      const la = a.location || '', lb = b.location || '';
+      return la.localeCompare(lb) || a.component_name.localeCompare(b.component_name);
+    });
+    return sorted.map(c =>
+      histCompRow(c.component_name, c.supplier_part, c.location, c.qty_deducted, 0)
+    ).join('');
+  }
+
+  // New-format: reconstruct tree from full parent path stored in sub_assembly_name
+  // e.g. "Top Assembly > Sub A > Sub B" tells us the full hierarchy chain
+  let html = '';
+  let lastPathSegments = [];
+
+  group.components.forEach(c => {
+    const pathStr   = c.sub_assembly_name || group.assembly_name;
+    const segments  = pathStr.split(' > ');
+    const leafDepth = segments.length; // depth of the leaf component itself
+
+    // Emit headers for any new path segments since the last component
+    segments.forEach((seg, i) => {
+      if (seg !== lastPathSegments[i]) {
+        // This level changed — emit a header for it
+        // Skip the top-level assembly name (index 0) as it's already in the modal header
+        if (i > 0) {
+          const indent = (i - 1) * 16;
+          html += `<div class="hist-sub-header" style="margin-left:${indent}px">
+            <span class="hist-sub-icon">◈</span>
+            <span>${seg}</span>
+          </div>`;
+        }
+        // Truncate lastPathSegments at this level so deeper levels re-emit on next component
+        lastPathSegments = [...segments.slice(0, i + 1)];
+      }
+    });
+    lastPathSegments = segments;
+
+    const indent = (leafDepth - 1) * 16;
+    html += histCompRow(c.component_name, c.supplier_part, c.location, c.qty_deducted, indent);
+  });
+
+  return html;
+}
+
+function histCompRow(name, part, location, qty, indent) {
+  return `<div class="hist-comp-row" style="margin-left:${indent}px">
+    <span class="hist-comp-name">${name}</span>
+    ${part     ? `<span class="hist-comp-part">${part}</span>`         : ''}
+    ${location ? `<span class="hist-comp-loc">${location}</span>`      : ''}
+    <span class="hist-comp-qty">−${qty}</span>
+  </div>`;
+}
+
+function exportHistoryCSV() {
+  if (!historyEntries.length) { alert('No history to export.'); return; }
+  const cols = ['timestamp','job_name','assembly_name','assembly_id','qty_built','component_name','supplier_part','location','qty_deducted'];
+  const csv  = [cols.join(','), ...historyEntries.map(e =>
+    cols.map(c => '"' + String(e[c] || '').replace(/"/g, '""') + '"').join(',')
+  )].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'checkout_history.csv';
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════════
+//  Delete & Export
+// ══════════════════════════════════════════════════════════
+async function deleteItem(id,e) {
+  if(e)e.stopPropagation();
+  const i=inventory.find(x=>x.id===id);
+  if(!confirm(`Delete "${i.name}"? This cannot be undone.`))return;
+  try {
+    await api('delete',{id});
+    inventory=inventory.filter(x=>x.id!==id);
+    boms=boms.filter(b=>b.parent_id!==id&&b.child_id!==id);
+    if(selectedId===id){selectedId=null;document.getElementById('detail-panel').classList.add('closed');}
+    render();setSyncStatus('ok','Deleted '+new Date().toLocaleTimeString());
+  } catch(err){alert('Delete failed: '+err.message);}
+}
+
+function printPickList(id, e) {
+  if (e) e.stopPropagation();
+  const parent = inventory.find(x => x.id === id);
+  if (!parent) return;
+  const qty = parseInt(prompt(`How many units of "${parent.name}" are you building?`, '1')) || 1;
+  if (qty < 1) return;
+  const resolved = resolveBom(id, qty);
+  const merged   = mergeBomLines(resolved);
+  if (!merged.length) { alert('No components found in BOM.'); return; }
+  const w = window.open('', '_blank');
+  if (w) writePickListToWindow(w, id, qty, merged);
+}
+
+// Writes the pick list HTML into an already-open window and triggers print
+function writePickListToWindow(w, parentId, qty, merged) {
+  const parent = inventory.find(x => x.id === parentId);
+  if (!parent || !w) return;
+
+  const sorted = [...merged].sort((a, b) => {
+    const la = a.item.location || '', lb = b.item.location || '';
+    return la.localeCompare(lb) || a.item.name.localeCompare(b.item.name);
+  });
+
+  const now  = new Date().toLocaleString();
+  const rows = sorted.map(({ item, qty: q }) => `
+    <tr>
+      <td>${item.supplier_part || '—'}</td>
+      <td>${item.name}</td>
+      <td>${item.location || '—'}</td>
+      <td class="qty-cell">${q}</td>
+      <td class="check-cell"><span class="check-box"></span></td>
+    </tr>`).join('');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Pick List — ${parent.name}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #111; padding: 32px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .meta { font-size: 12px; color: #666; margin-bottom: 24px; display: flex; gap: 24px; flex-wrap: wrap; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left; padding: 8px 10px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: .06em; background: #f4f4f4; border-top: 2px solid #111;
+    border-bottom: 1px solid #ccc; white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid #e0e0e0; }
+  tbody tr:last-child { border-bottom: 2px solid #111; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  td { padding: 9px 10px; vertical-align: middle; }
+  .qty-cell { font-weight: 600; text-align: center; font-size: 14px; width: 70px; }
+  .check-cell { width: 50px; text-align: center; }
+  .check-box { display: inline-block; width: 18px; height: 18px; border: 1.5px solid #aaa; border-radius: 3px; }
+  .footer { margin-top: 20px; font-size: 11px; color: #aaa; text-align: right; }
+  @media print { body { padding: 16px; } @page { margin: 16mm; } }
+</style>
+</head>
+<body>
+  <h1>Pick List — ${parent.name}</h1>
+  <div class="meta">
+    <span><b>Qty building:</b> ${qty}</span>
+    <span><b>Components:</b> ${sorted.length}</span>
+    <span><b>Generated:</b> ${now}</span>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Supplier Part #</th>
+      <th>Component</th>
+      <th>Location</th>
+      <th style="text-align:center">Qty</th>
+      <th style="text-align:center">✓</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="footer">ElectoStock</div>
+  <script>window.onload = () => window.print();<\/script>
+</body>
+</html>`;
+
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
+function exportCSV() {
+  const cols=['supplier_part','name','category','qty','min','location','unit_cost','supplier','part','notes'];
+  const csv=[cols.join(','),...inventory.map(i=>cols.map(c=>'"'+(i[c]||'').toString().replace(/"/g,'""')+'"').join(','))].join('\n');
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='electronics_inventory.csv';a.click();
+}
+
+function exportBOMs() {
+  const bomParents = inventory.filter(i => hasBom(i.id));
+  if (!bomParents.length) { alert('No BOMs defined yet.'); return; }
+
+  const cols = [
+    'assembly_name',
+    'assembly_unit_cost',
+    'component_name',
+    'component_supplier_part',
+    'component_category',
+    'quantity_per_unit',
+    'component_unit_cost',
+    'line_cost',
+    'component_location',
+    'component_stock',
+    'nesting_depth',
+  ];
+
+  const rows = [];
+
+  bomParents.forEach(parent => {
+    const bomTotal = calcBomCost(parent.id);
+    // assembly_unit_cost: use BOM-calculated cost (same as what's shown in the table)
+    const assemblyEffectiveCost = hasBom(parent.id) ? bomTotal : (parent.unit_cost || 0);
+    const lines = getBomLines(parent.id);
+
+    lines.forEach(line => {
+      const child = inventory.find(i => i.id === line.child_id);
+      if (!child) return;
+      // child's effective cost accounts for its own BOM if it has one
+      const childEffectiveCost = hasBom(child.id) ? calcBomCost(child.id) : (child.unit_cost || 0);
+      const lineCost = childEffectiveCost * line.quantity;
+      rows.push([
+        parent.name,
+        assemblyEffectiveCost.toFixed(4),
+        child.name,
+        child.supplier_part || '',
+        child.category,
+        line.quantity,
+        childEffectiveCost.toFixed(4),
+        lineCost.toFixed(4),
+        child.location || '',
+        child.qty,
+        0,
+      ]);
+      // Nested BOM lines
+      if (hasBom(child.id)) {
+        const nested = resolveBom(child.id, line.quantity);
+        const merged = mergeBomLines(nested);
+        merged.forEach(({ item, qty, depth }) => {
+          const itemEffectiveCost = hasBom(item.id) ? calcBomCost(item.id) : (item.unit_cost || 0);
+          const nestedLineCost = itemEffectiveCost * qty;
+          rows.push([
+            parent.name,
+            assemblyEffectiveCost.toFixed(4),
+            item.name + ' (via ' + child.name + ')',
+            item.supplier_part || '',
+            item.category,
+            qty,
+            itemEffectiveCost.toFixed(4),
+            nestedLineCost.toFixed(4),
+            item.location || '',
+            item.qty,
+            depth + 1,
+          ]);
+        });
+      }
+    });
+
+    // Blank separator row between assemblies
+    rows.push(new Array(cols.length).fill(''));
+  });
+
+  const escape = v => '"' + String(v).replace(/"/g, '""') + '"';
+  const csv = [cols.join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'electronics_boms.csv';
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════════
+//  Init
+// ══════════════════════════════════════════════════════════
+syncAll(false).then(startPolling);
+</script>
+</body>
+</html>
