@@ -8,17 +8,19 @@
 // ══════════════════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════════════════
-const SHEET_NAME  = 'Inventory';
-const CATS_SHEET  = 'Categories';
-const BOM_SHEET   = 'BOMs';
-const META_SHEET  = 'Meta';
-const LOG_SHEET   = 'Checkout Log';
+const SHEET_NAME   = 'Inventory';
+const CATS_SHEET   = 'Categories';
+const BOM_SHEET    = 'BOMs';
+const META_SHEET   = 'Meta';
+const LOG_SHEET    = 'Checkout Log';
+const USERS_SHEET  = 'Users';
 
-const INV_HEADERS  = ['id','part','name','category','qty','min','location','unit_cost','supplier','supplier_part','notes','updated_at'];
-const CAT_HEADERS  = ['name','color'];
-const BOM_HEADERS  = ['parent_id','child_id','quantity'];
-const META_HEADERS = ['key','value'];
-const LOG_HEADERS  = ['timestamp','job_name','assembly_name','assembly_id','qty_built','component_name','component_supplier_part','component_location','qty_deducted','sub_assembly_name','depth'];
+const INV_HEADERS   = ['id','part','name','category','qty','min','location','unit_cost','supplier','supplier_part','notes','updated_at'];
+const CAT_HEADERS   = ['name','color'];
+const BOM_HEADERS   = ['parent_id','child_id','quantity'];
+const META_HEADERS  = ['key','value'];
+const LOG_HEADERS   = ['timestamp','job_name','assembly_name','assembly_id','qty_built','component_name','component_supplier_part','component_location','qty_deducted','sub_assembly_name','depth'];
+const USER_HEADERS  = ['username','password_hash','role','token','token_expires'];
 
 // ─── Sheet helpers ────────────────────────────────────────────────────────────
 
@@ -92,7 +94,23 @@ function getLogSheet() {
   return sheet;
 }
 
-function touchLastModified() {
+function getUsersSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(USERS_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(USERS_SHEET);
+    sheet.appendRow(USER_HEADERS);
+    sheet.getRange(1,1,1,USER_HEADERS.length).setFontWeight('bold').setBackground('#0d0f11').setFontColor('#00d4aa');
+    sheet.setFrozenRows(1);
+    // Hide the password_hash and token columns from casual viewers
+    sheet.hideColumns(2); // password_hash
+    sheet.hideColumns(4); // token
+    sheet.hideColumns(5); // token_expires
+  }
+  return sheet;
+}
+
+
   const sheet = getMetaSheet();
   const data  = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
@@ -137,29 +155,39 @@ function handleRequest(e) {
 
     let result;
     switch (action) {
-      // Inventory
-      case 'getAll':           result = actionGetAll();                                        break;
-      case 'add':              result = actionAdd(data.item);                                  break;
-      case 'update':           result = actionUpdate(data.item);                               break;
-      case 'delete':           result = actionDelete(Number(data.id));                         break;
-      case 'adjustQty':        result = actionAdjustQty(data);                                 break;
-      case 'batchAdjustQty':   result = actionBatchAdjustQty(data.adjustments);                break;
-      // Categories
-      case 'getCats':          result = actionGetCats();                                       break;
-      case 'addCat':           result = actionAddCat(data.name, data.color);                   break;
-      case 'updateCat':        result = actionUpdateCat(data.oldName, data.name, data.color);  break;
-      case 'deleteCat':        result = actionDeleteCat(data.name);                            break;
-      // BOMs
-      case 'getBOMs':          result = actionGetBOMs();                                       break;
-      case 'saveBOM':          result = actionSaveBOM(Number(data.parent_id), data.lines);     break;
-      case 'deleteBOM':        result = actionDeleteBOM(Number(data.parent_id));               break;
-      // Checkout log
-      case 'logCheckout':      result = actionLogCheckout(data);                               break;
-      case 'getCheckoutLog':   result = actionGetCheckoutLog(data.assembly_id, data.limit);    break;
-      // Polling / bulk load
-      case 'getLastModified':  result = actionGetLastModified();                               break;
-      case 'getAll+getCats':   result = actionGetAllAndCats();                                 break;
-      default:                 result = { error: 'Unknown action: ' + action };
+      // Auth — no token required
+      case 'login':            result = actionLogin(data.username, data.password);   break;
+      case 'logout':           result = actionLogout(data.token);                    break;
+      // All other actions require a valid token
+      default: {
+        const authErr = validateToken(data.token || params.token);
+        if (authErr) { result = authErr; break; }
+        switch (action) {
+          // Inventory
+          case 'getAll':           result = actionGetAll();                                        break;
+          case 'add':              result = actionAdd(data.item);                                  break;
+          case 'update':           result = actionUpdate(data.item);                               break;
+          case 'delete':           result = actionDelete(Number(data.id));                         break;
+          case 'adjustQty':        result = actionAdjustQty(data);                                 break;
+          case 'batchAdjustQty':   result = actionBatchAdjustQty(data.adjustments);                break;
+          // Categories
+          case 'getCats':          result = actionGetCats();                                       break;
+          case 'addCat':           result = actionAddCat(data.name, data.color);                   break;
+          case 'updateCat':        result = actionUpdateCat(data.oldName, data.name, data.color);  break;
+          case 'deleteCat':        result = actionDeleteCat(data.name);                            break;
+          // BOMs
+          case 'getBOMs':          result = actionGetBOMs();                                       break;
+          case 'saveBOM':          result = actionSaveBOM(Number(data.parent_id), data.lines);     break;
+          case 'deleteBOM':        result = actionDeleteBOM(Number(data.parent_id));               break;
+          // Checkout log
+          case 'logCheckout':      result = actionLogCheckout(data);                               break;
+          case 'getCheckoutLog':   result = actionGetCheckoutLog(data.assembly_id, data.limit);    break;
+          // Polling / bulk load
+          case 'getLastModified':  result = actionGetLastModified();                               break;
+          case 'getAll+getCats':   result = actionGetAllAndCats();                                 break;
+          default:                 result = { error: 'Unknown action: ' + action };
+        }
+      }
     }
 
     const output = ContentService.createTextOutput(JSON.stringify(result));
@@ -499,4 +527,99 @@ function installOnEditTrigger() {
     .onEdit()
     .create();
   Logger.log('onEdit trigger installed successfully.');
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+// Simple hash using Apps Script's built-in Utilities.
+// SHA-256 of "ELECTOSTOCK:" + password, returned as hex string.
+function hashPassword(password) {
+  const raw  = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    'ELECTOSTOCK:' + password,
+    Utilities.Charset.UTF_8
+  );
+  return raw.map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+}
+
+// Generate a random session token
+function generateToken() {
+  const bytes = Utilities.getSecureRandomBytes(32);
+  return Utilities.base64Encode(bytes).replace(/[^a-zA-Z0-9]/g, '').substring(0, 48);
+}
+
+// Token expires after 8 hours
+const TOKEN_TTL_MS = 8 * 60 * 60 * 1000;
+
+function actionLogin(username, password) {
+  if (!username || !password) return { error: 'Username and password required' };
+  const sheet = getUsersSheet();
+  ensureHeaders(sheet, USER_HEADERS);
+  const data  = sheet.getDataRange().getValues();
+  const hash  = hashPassword(password);
+
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().toLowerCase() === username.trim().toLowerCase()) {
+      if (String(data[i][1]) !== hash) return { error: 'Invalid username or password' };
+      // Generate token and store with expiry
+      const token   = generateToken();
+      const expires = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
+      sheet.getRange(i+1, 4).setValue(token);
+      sheet.getRange(i+1, 5).setValue(expires);
+      return { success: true, token, username: String(data[i][0]), role: String(data[i][2] || 'user') };
+    }
+  }
+  return { error: 'Invalid username or password' };
+}
+
+function actionLogout(token) {
+  if (!token) return { success: true };
+  const sheet = getUsersSheet();
+  const data  = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][3]) === token) {
+      sheet.getRange(i+1, 4).setValue('');
+      sheet.getRange(i+1, 5).setValue('');
+      return { success: true };
+    }
+  }
+  return { success: true };
+}
+
+function validateToken(token) {
+  if (!token) return { error: 'Not authenticated', auth: false };
+  const sheet = getUsersSheet();
+  const data  = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][3]) === token) {
+      const expires = new Date(String(data[i][4]));
+      if (isNaN(expires) || Date.now() > expires.getTime()) {
+        // Expired — clear it
+        sheet.getRange(i+1, 4).setValue('');
+        sheet.getRange(i+1, 5).setValue('');
+        return { error: 'Session expired, please log in again', auth: false };
+      }
+      return null; // valid
+    }
+  }
+  return { error: 'Not authenticated', auth: false };
+}
+
+// ─── Helper to create a user (run manually from Apps Script editor) ──────────
+// Usage: createUser('alice', 'mypassword', 'admin')
+function createUser(username, password, role) {
+  const sheet = getUsersSheet();
+  ensureHeaders(sheet, USER_HEADERS);
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().toLowerCase() === username.trim().toLowerCase()) {
+      // Update existing user
+      sheet.getRange(i+1, 2).setValue(hashPassword(password));
+      sheet.getRange(i+1, 3).setValue(role || 'user');
+      Logger.log('Updated user: ' + username);
+      return;
+    }
+  }
+  sheet.appendRow([username.trim(), hashPassword(password), role || 'user', '', '']);
+  Logger.log('Created user: ' + username);
 }
