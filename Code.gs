@@ -542,10 +542,11 @@ function hashPassword(password) {
   return raw.map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
 }
 
-// Generate a random session token
+// Generate a random session token using available Apps Script utilities
 function generateToken() {
-  const bytes = Utilities.getSecureRandomBytes(32);
-  return Utilities.base64Encode(bytes).replace(/[^a-zA-Z0-9]/g, '').substring(0, 48);
+  const a = Utilities.getUuid().replace(/-/g, '');
+  const b = Utilities.getUuid().replace(/-/g, '');
+  return (a + b).substring(0, 48);
 }
 
 // Token expires after 8 hours
@@ -608,12 +609,15 @@ function validateToken(token) {
 // ─── Helper to create a user (run manually from Apps Script editor) ──────────
 // Usage: createUser('alice', 'mypassword', 'admin')
 function createUser(username, password, role) {
+  if (!username || !password) {
+    Logger.log('Usage: call createUser("username", "password", "role") directly, or use one of the setup functions below.');
+    return;
+  }
   const sheet = getUsersSheet();
   ensureHeaders(sheet, USER_HEADERS);
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim().toLowerCase() === username.trim().toLowerCase()) {
-      // Update existing user
       sheet.getRange(i+1, 2).setValue(hashPassword(password));
       sheet.getRange(i+1, 3).setValue(role || 'user');
       Logger.log('Updated user: ' + username);
@@ -623,3 +627,21 @@ function createUser(username, password, role) {
   sheet.appendRow([username.trim(), hashPassword(password), role || 'user', '', '']);
   Logger.log('Created user: ' + username);
 }
+
+// ─── User setup functions — edit and run these from the Apps Script editor ───
+// Step 1: Edit the username/password/role below
+// Step 2: Select the function name in the dropdown and click Run
+// Step 3: Check the Execution Log to confirm success
+// You can add as many of these as you need, one per user.
+
+function setupUser1() {
+  createUser('admin', 'changeme', 'admin');
+}
+
+// function setupUser2() {
+//   createUser('alice', 'password123', 'user');
+// }
+
+// function setupUser3() {
+//   createUser('bob', 'password456', 'user');
+// }
