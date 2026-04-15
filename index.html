@@ -233,19 +233,61 @@
   .detail-bom-line{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px;}
   .detail-bom-line:last-child{border-bottom:none;}
   .detail-bom-qty{font-family:var(--mono);font-size:12px;color:var(--text3);}
+
+  /* ── Login screen ── */
+  .login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;}
+  .login-screen.hidden{display:none;}
+  .login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:36px 40px;width:360px;max-width:95vw;display:flex;flex-direction:column;gap:20px;}
+  .login-logo-mark{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:2px;}
+  .login-logo-name{font-size:22px;font-weight:600;color:var(--text);letter-spacing:-.01em;margin-bottom:4px;}
+  .login-subtitle{font-size:13px;color:var(--text3);}
+  .login-err{font-size:12px;color:var(--danger);min-height:16px;text-align:center;}
+  .login-footer{font-size:11px;color:var(--text3);text-align:center;font-family:var(--mono);}
+  .login-user-badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);font-family:var(--mono);}
+  .login-user-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
 </style>
 </head>
 <body>
 
+<!-- ══ Login Screen ══ -->
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div>
+      <div class="login-logo-mark">⬡ ElectoStock</div>
+      <div class="login-logo-name">Inventory</div>
+      <div class="login-subtitle">Sign in to continue</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input id="login-username" type="text" placeholder="Username" autocomplete="username"
+        onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input id="login-password" type="password" placeholder="Password" autocomplete="current-password"
+        onkeydown="if(event.key==='Enter')submitLogin()"/>
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <button class="btn btn-primary" id="login-btn" onclick="submitLogin()" style="width:100%;justify-content:center;padding:10px">
+      Sign In
+    </button>
+    <div class="login-footer">ElectoStock — Electronics Inventory</div>
+  </div>
+</div>
+
 <div class="update-toast" id="update-toast"></div>
 
-<div class="shell">
+<div class="shell" id="main-shell" style="display:none">
 
   <!-- ══ Sidebar ══ -->
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-mark">⬡ ElectoStock</div>
       <div class="logo-name">Inventory</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+        <div class="login-user-badge"><span class="login-user-dot"></span><span id="sidebar-username"></span></div>
+        <button class="cat-manage-btn" onclick="logout()" style="font-size:11px">Sign out</button>
+      </div>
     </div>
     <nav class="nav">
       <div class="nav-label">Views</div>
@@ -537,7 +579,13 @@ const SHEET_URL        = 'https://script.google.com/macros/s/AKfycbzbSuWw-DXNsrO
 const POLL_INTERVAL_MS = 30_000; // How often to check for sheet changes (ms)
 // ════════════════════════════════════════════════════════════
 
-const COLOR_PALETTE = [
+// ══════════════════════════════════════════════════════════
+//  Auth state
+// ══════════════════════════════════════════════════════════
+let sessionToken    = localStorage.getItem('electostock_token')    || null;
+let sessionUsername = localStorage.getItem('electostock_username') || null;
+
+
   '#8a97a5','#3b82f6','#a855f7','#10b981','#f59e0b','#ef4444',
   '#ec4899','#06b6d4','#f97316','#84cc16','#6366f1','#78716c',
   '#e11d48','#0ea5e9','#14b8a6','#22c55e','#8b5cf6','#f43f5e',
@@ -570,12 +618,18 @@ let historyEntries = [];
 //  API
 // ══════════════════════════════════════════════════════════
 async function api(action, data = {}) {
+  // Include session token with every request (login doesn't need one)
+  if (action !== 'login' && action !== 'logout' && sessionToken) {
+    data = { ...data, token: sessionToken };
+  }
   const url = SHEET_URL
     + '?action=' + encodeURIComponent(action)
     + '&data='   + encodeURIComponent(JSON.stringify(data));
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const json = await res.json();
+  // If server says not authenticated, kick back to login
+  if (json.auth === false) { showLogin(json.error); throw new Error(json.error); }
   if (json.error) throw new Error(json.error);
   return json;
 }
@@ -2087,9 +2141,70 @@ function exportBOMs() {
 }
 
 // ══════════════════════════════════════════════════════════
+//  Auth
+// ══════════════════════════════════════════════════════════
+function showLogin(errMsg) {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('main-shell').style.display = 'none';
+  document.getElementById('login-err').textContent = errMsg || '';
+  document.getElementById('login-username').value  = '';
+  document.getElementById('login-password').value  = '';
+  sessionToken    = null;
+  sessionUsername = null;
+  localStorage.removeItem('electostock_token');
+  localStorage.removeItem('electostock_username');
+  clearInterval(pollTimer);
+}
+
+function showApp(username) {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('main-shell').style.display = 'flex';
+  document.getElementById('sidebar-username').textContent = username || '';
+}
+
+async function submitLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const btn      = document.getElementById('login-btn');
+  const err      = document.getElementById('login-err');
+  if (!username || !password) { err.textContent = 'Enter your username and password.'; return; }
+  err.textContent = '';
+  btn.disabled    = true;
+  btn.innerHTML   = '<div class="spinner"></div>';
+  try {
+    const r = await api('login', { username, password });
+    sessionToken    = r.token;
+    sessionUsername = r.username;
+    localStorage.setItem('electostock_token',    r.token);
+    localStorage.setItem('electostock_username', r.username);
+    showApp(r.username);
+    syncAll(false).then(startPolling);
+  } catch(e) {
+    err.textContent = e.message || 'Login failed';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+async function logout() {
+  if (sessionToken) {
+    api('logout', { token: sessionToken }).catch(() => {});
+  }
+  showLogin();
+}
+
+// ══════════════════════════════════════════════════════════
 //  Init
 // ══════════════════════════════════════════════════════════
-syncAll(false).then(startPolling);
+if (sessionToken) {
+  // Stored token — attempt to resume session
+  showApp(sessionUsername);
+  syncAll(false).catch(() => showLogin('Session expired, please sign in again')).then(startPolling);
+} else {
+  // No token — show login
+  showLogin();
+}
 </script>
 </body>
 </html>
