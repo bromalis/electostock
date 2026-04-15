@@ -110,7 +110,7 @@ function getUsersSheet() {
   return sheet;
 }
 
-
+function touchLastModified() {
   const sheet = getMetaSheet();
   const data  = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
