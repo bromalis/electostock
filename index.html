@@ -245,6 +245,9 @@
   .login-footer{font-size:11px;color:var(--text3);text-align:center;font-family:var(--mono);}
   .login-user-badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);font-family:var(--mono);}
   .login-user-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
+  /* Role gating (the server enforces the same rules) */
+  body[data-role="viewer"] .needs-user,
+  body:not([data-role="admin"]) .needs-admin{display:none !important;}
 </style>
 </head>
 <body>
@@ -304,7 +307,7 @@
     <div class="cat-filter">
       <div class="cat-filter-header">
         <span class="nav-label" style="margin:0">Categories</span>
-        <button class="cat-manage-btn" onclick="openCatModal()">⚙ Manage</button>
+        <button class="cat-manage-btn needs-user" onclick="openCatModal()">⚙ Manage</button>
       </div>
       <div id="cat-tags"></div>
     </div>
@@ -335,7 +338,7 @@
           <option value="supplier_part">Sort: Supplier Part #</option>
           <option value="category">Sort: Category</option>
         </select>
-        <button class="btn btn-primary" onclick="openModal()">＋ Add Item</button>
+        <button class="btn btn-primary needs-user" onclick="openModal()">＋ Add Item</button>
       </div>
     </div>
 
@@ -584,6 +587,7 @@ const POLL_INTERVAL_MS = 30_000; // How often to check for sheet changes (ms)
 // ══════════════════════════════════════════════════════════
 let sessionToken    = localStorage.getItem('electostock_token')    || null;
 let sessionUsername = localStorage.getItem('electostock_username') || null;
+let sessionRole     = localStorage.getItem('electostock_role')     || 'user';
 
 const COLOR_PALETTE = [
   '#8a97a5','#3b82f6','#a855f7','#10b981','#f59e0b','#ef4444',
@@ -622,10 +626,14 @@ async function api(action, data = {}) {
   if (action !== 'login' && action !== 'logout' && sessionToken) {
     data = { ...data, token: sessionToken };
   }
-  const url = SHEET_URL
-    + '?action=' + encodeURIComponent(action)
-    + '&data='   + encodeURIComponent(JSON.stringify(data));
-  const res = await fetch(url, { redirect: 'follow' });
+  // POST keeps passwords and tokens out of URLs. text/plain avoids a CORS
+  // preflight, which Apps Script web apps can't answer.
+  const res = await fetch(SHEET_URL, {
+    method:   'POST',
+    redirect: 'follow',
+    headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
+    body:     JSON.stringify({ action, data }),
+  });
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const json = await res.json();
   // If server says not authenticated, kick back to login
@@ -684,35 +692,6 @@ function mergeBomLines(lines) {
   return [...map.values()];
 }
 
-// Build the enriched component list for logging — includes parent_path and depth
-// so the checkout log can reconstruct the BOM tree without referencing live BOM data.
-// parentPath = full chain of ancestor assembly names, e.g. "Top Asm > Sub Asm A"
-function resolveLogComponents(parentId, multiplier, parentPath, depth, visited = new Set()) {
-  if (visited.has(parentId)) return [];
-  visited.add(parentId);
-  const lines  = getBomLines(parentId);
-  const result = [];
-  lines.forEach(line => {
-    const child = inventory.find(i => i.id === line.child_id);
-    if (!child) return;
-    const qty = line.quantity * multiplier;
-    if (hasBom(child.id)) {
-      // Recurse — extend the path with this sub-assembly's name
-      const childPath = parentPath + ' > ' + child.name;
-      result.push(...resolveLogComponents(child.id, qty, childPath, depth + 1, new Set(visited)));
-    } else {
-      result.push({
-        name:               child.name,
-        supplier_part:      child.supplier_part || '',
-        location:           child.location      || '',
-        qty_deducted:       qty,
-        sub_assembly_name:  parentPath,   // full path to immediate parent
-        depth,
-      });
-    }
-  });
-  return result;
-}
 // Calculate the total BOM cost for one unit of an item by recursing through
 // all BOM lines. Always recalculates from leaf unit_costs — never uses a
 // child's stored unit_cost, so stale cached values don't cause wrong totals.
@@ -732,46 +711,12 @@ function calcBomCost(parentId, visited = new Set()) {
   }, 0);
 }
 
-// Walk upward through all ancestor assemblies that contain changedItemId
-// anywhere in their BOM tree, recalculate each one's cost, and persist changes.
-async function propagateBomCosts(changedItemId) {
-  // Build child→parents map from current boms array
-  const parentMap = new Map();
-  boms.forEach(b => {
-    if (!parentMap.has(b.child_id)) parentMap.set(b.child_id, new Set());
-    parentMap.get(b.child_id).add(b.parent_id);
+// Apply unit_cost changes the server made when it recalculated assembly costs.
+function applyCostUpdates(updates) {
+  (updates || []).forEach(({ id, unit_cost }) => {
+    const item = inventory.find(x => x.id === id);
+    if (item) item.unit_cost = unit_cost;
   });
-
-  // BFS upward to collect all ancestor assembly IDs
-  const toUpdate = new Set();
-  const queue    = [changedItemId];
-  while (queue.length) {
-    const id      = queue.shift();
-    const parents = parentMap.get(id) || new Set();
-    parents.forEach(pid => {
-      if (!toUpdate.has(pid)) {
-        toUpdate.add(pid);
-        queue.push(pid);
-      }
-    });
-  }
-
-  if (!toUpdate.size) return;
-
-  // Recalculate cost for each ancestor and update if it changed
-  const updates = [];
-  toUpdate.forEach(id => {
-    const idx = inventory.findIndex(x => x.id === id);
-    if (idx < 0) return;
-    const newCost = calcBomCost(id);
-    if (newCost > 0 && Math.abs(newCost - (inventory[idx].unit_cost || 0)) > 0.000001) {
-      const updatedItem = { ...inventory[idx], unit_cost: newCost };
-      inventory[idx]    = updatedItem;
-      updates.push(api('update', { item: updatedItem }).catch(() => {}));
-    }
-  });
-
-  if (updates.length) await Promise.all(updates);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1033,11 +978,11 @@ function renderTable() {
       <td>${notesHtml}</td>
       <td class="actions-col"><div class="action-btns">
         ${hasBom(item.id)
-          ? `<button class="btn btn-warn btn-sm" onclick="openBomCheckout(${item.id},event)">↑ BOM Out</button>
-             <button class="btn btn-ghost btn-sm" onclick="openAdj(${item.id},event)">± Adjust</button>`
-          : `<button class="btn btn-ghost btn-sm" onclick="openAdj(${item.id},event)">± Adjust</button>`}
-        <button class="btn btn-ghost btn-sm" onclick="openEditModal(${item.id},event)">Edit</button>
-        <button class="btn btn-ghost btn-sm" style="color:var(--danger)" onclick="deleteItem(${item.id},event)">Del</button>
+          ? `<button class="btn btn-warn btn-sm needs-user" onclick="openBomCheckout(${item.id},event)">↑ BOM Out</button>
+             <button class="btn btn-ghost btn-sm needs-user" onclick="openAdj(${item.id},event)">± Adjust</button>`
+          : `<button class="btn btn-ghost btn-sm needs-user" onclick="openAdj(${item.id},event)">± Adjust</button>`}
+        <button class="btn btn-ghost btn-sm needs-user" onclick="openEditModal(${item.id},event)">Edit</button>
+        <button class="btn btn-ghost btn-sm needs-admin" style="color:var(--danger)" onclick="deleteItem(${item.id},event)">Del</button>
       </div></td>
     </tr>`;
   }).join('');
@@ -1111,12 +1056,12 @@ function renderDetail(id) {
     </div>
     <div class="detail-actions">
       ${hasBom(id)
-        ?`<button class="btn btn-warn btn-sm" style="flex:1" onclick="openBomCheckout(${id},null)">↑ BOM Checkout</button>
-           <button class="btn btn-ghost btn-sm" onclick="openAdj(${id},null)">± Adjust</button>`
-        :`<button class="btn btn-primary btn-sm" style="flex:1" onclick="openAdj(${id},null)">± Adjust Stock</button>`}
+        ?`<button class="btn btn-warn btn-sm needs-user" style="flex:1" onclick="openBomCheckout(${id},null)">↑ BOM Checkout</button>
+           <button class="btn btn-ghost btn-sm needs-user" onclick="openAdj(${id},null)">± Adjust</button>`
+        :`<button class="btn btn-primary btn-sm needs-user" style="flex:1" onclick="openAdj(${id},null)">± Adjust Stock</button>`}
       ${hasBom(id)?`<button class="btn btn-ghost btn-sm" onclick="printPickList(${id})">⎙ Pick List</button>`:''}
-      <button class="btn btn-ghost btn-sm" onclick="openBomEditor(${id})">◈ BOM</button>
-      <button class="btn btn-ghost btn-sm" onclick="openEditModal(${id},null)">Edit</button>
+      <button class="btn btn-ghost btn-sm needs-user" onclick="openBomEditor(${id})">◈ BOM</button>
+      <button class="btn btn-ghost btn-sm needs-user" onclick="openEditModal(${id},null)">Edit</button>
     </div>`;
 }
 
@@ -1154,6 +1099,7 @@ function openEditModal(id, e) {
   document.getElementById('f-supplier-part').value = i.supplier_part || '';
   document.getElementById('f-notes').value         = i.notes         || '';
   document.getElementById('modal-copy-btn').style.display = 'inline-flex';
+  editBaseline = readItemForm();
   document.getElementById('modal').classList.add('open');
 }
 
@@ -1176,12 +1122,14 @@ function copyAsNew() {
   document.getElementById('f-qty').value = 0;
 }
 
-async function saveItem() {
-  const name=document.getElementById('f-name').value.trim();
-  if(!name){document.getElementById('modal-err').textContent='Component name is required.';return;}
-  const item={
+// Form values as they would be saved. editBaseline holds this snapshot from
+// when the edit modal opened, so saveItem can send only the changed fields.
+let editBaseline = null;
+
+function readItemForm() {
+  return {
     part:document.getElementById('f-part').value.trim(),
-    name,
+    name:document.getElementById('f-name').value.trim(),
     category:document.getElementById('f-cat').value,
     qty:parseInt(document.getElementById('f-qty').value)||0,
     min:parseInt(document.getElementById('f-min').value)||0,
@@ -1191,16 +1139,24 @@ async function saveItem() {
     supplier_part:document.getElementById('f-supplier-part').value.trim(),
     notes:document.getElementById('f-notes').value.trim(),
   };
+}
+
+async function saveItem() {
+  const item=readItemForm();
+  if(!item.name){document.getElementById('modal-err').textContent='Component name is required.';return;}
   const btn=document.getElementById('modal-save');
   btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';
   try {
     if(editId){
-      item.id=editId;
-      await api('update',{item});
-      const idx=inventory.findIndex(x=>x.id===editId);
-      if(idx>=0)inventory[idx]={...inventory[idx],...item};
-      // Propagate cost change upward to all ancestor BOM assemblies
-      await propagateBomCosts(editId);
+      // Send only what changed so we don't overwrite others' edits (e.g. qty)
+      const patch={id:editId};
+      Object.keys(item).forEach(k=>{ if(item[k]!==editBaseline[k]) patch[k]=item[k]; });
+      if(Object.keys(patch).length>1){
+        const r=await api('update',{item:patch});
+        const idx=inventory.findIndex(x=>x.id===editId);
+        if(idx>=0)inventory[idx]=r.item||{...inventory[idx],...patch};
+        applyCostUpdates(r.cost_updates);
+      }
     } else {
       const r=await api('add',{item});
       const newItem = r.item||{...item,id:Date.now()};
@@ -1210,7 +1166,8 @@ async function saveItem() {
         const srcLines = getBomLines(copySourceId);
         if(srcLines.length){
           const lines = srcLines.map(l=>({child_id:l.child_id,quantity:l.quantity}));
-          await api('saveBOM',{parent_id:newItem.id,lines});
+          const rb = await api('saveBOM',{parent_id:newItem.id,lines});
+          applyCostUpdates(rb.cost_updates);
           boms.push(...lines.map(l=>({parent_id:newItem.id,child_id:l.child_id,quantity:l.quantity})));
         }
         copySourceId = null;
@@ -1478,22 +1435,11 @@ async function saveBom() {
   const btn = document.getElementById('bom-save-btn');
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
   try {
-    await api('saveBOM', { parent_id: bomEditId, lines: validLines.map(l => ({ child_id: l.child_id, quantity: l.quantity })) });
-    // Update local boms
+    // The server validates the BOM and recalculates this assembly's cost and its ancestors'
+    const r = await api('saveBOM', { parent_id: bomEditId, lines: validLines.map(l => ({ child_id: l.child_id, quantity: l.quantity })) });
     boms = boms.filter(b => b.parent_id !== bomEditId);
     boms.push(...validLines.map(l => ({ parent_id: bomEditId, child_id: l.child_id, quantity: l.quantity })));
-
-    // Update cost of this assembly and all ancestor assemblies that contain it
-    const bomTotal = calcBomCost(bomEditId);
-    if (bomTotal > 0) {
-      const parentIdx = inventory.findIndex(x => x.id === bomEditId);
-      if (parentIdx >= 0) {
-        const updatedItem = { ...inventory[parentIdx], unit_cost: bomTotal };
-        await api('update', { item: updatedItem });
-        inventory[parentIdx] = updatedItem;
-      }
-    }
-    await propagateBomCosts(bomEditId);
+    applyCostUpdates(r.cost_updates);
 
     bomWorkingCopy = null;
     closeBomModal();
@@ -1627,23 +1573,13 @@ async function confirmBomCheckout(printAfter=false) {
 
   try {
     const jobName    = document.getElementById('bom-co-jobname').value.trim() + ' ' + document.getElementById('bom-co-job').value.trim();
-    const parent     = inventory.find(x => x.id === bomCoData.parentId);
-    const adjustments = bomCoData.merged.map(({item,qty}) => ({
-      id: item.id, action: 'remove', qty
-    }));
-    const logPayload = {
-      job_name:      jobName,
-      assembly_name: parent ? parent.name : '',
-      assembly_id:   bomCoData.parentId,
-      qty_built:     bomCoData.checkoutQty,
-      components:    resolveLogComponents(bomCoData.parentId, bomCoData.checkoutQty, parent ? parent.name : '', 0),
-    };
-
-    // Fire stock deduction and log write in parallel
-    const [r] = await Promise.all([
-      api('batchAdjustQty', { adjustments }),
-      api('logCheckout', logPayload).catch(() => {}), // log failure is non-blocking
-    ]);
+    // The server re-resolves the BOM from the sheet, deducts the leaf components
+    // and writes the checkout log in one locked request.
+    const r = await api('checkout', {
+      assembly_id: bomCoData.parentId,
+      qty_built:   bomCoData.checkoutQty,
+      job_name:    jobName,
+    });
 
     (r.results||[]).forEach(({id,newQty}) => {
       const idx = inventory.findIndex(x => x.id === id);
@@ -1654,7 +1590,7 @@ async function confirmBomCheckout(printAfter=false) {
     render();
     if (selectedId) renderDetail(selectedId);
     setSyncStatus('ok', 'BOM checkout saved ' + new Date().toLocaleTimeString());
-    showToast(`↑ Checked out ${snapshotData.checkoutQty}× — ${adjustments.length} components decremented`);
+    showToast(`↑ Checked out ${snapshotData.checkoutQty}× — ${(r.results||[]).length} components decremented`);
     if (printAfter && printWindow) {
       writePickListToWindow(printWindow, snapshotData.parentId, snapshotData.checkoutQty, snapshotData.merged);
     }
@@ -1715,7 +1651,7 @@ function renderCatList() {
       </div>
       <span class="cat-name-text" title="${cat.name}">${cat.name}</span>
       <span class="cat-count">${count}</span>
-      <button class="btn btn-danger btn-xs" id="del-cat-${idx}"
+      <button class="btn btn-danger btn-xs needs-admin" id="del-cat-${idx}"
         onclick="removeCategory(${idx},'${cat.name.replace(/'/g,"\\'")}',event)">Remove</button>
     </div>`;
   }).join('');
@@ -1958,9 +1894,10 @@ async function deleteItem(id,e) {
   const i=inventory.find(x=>x.id===id);
   if(!confirm(`Delete "${i.name}"? This cannot be undone.`))return;
   try {
-    await api('delete',{id});
+    const r=await api('delete',{id});
     inventory=inventory.filter(x=>x.id!==id);
     boms=boms.filter(b=>b.parent_id!==id&&b.child_id!==id);
+    applyCostUpdates(r.cost_updates);
     if(selectedId===id){selectedId=null;document.getElementById('detail-panel').classList.add('closed');}
     render();setSyncStatus('ok','Deleted '+new Date().toLocaleTimeString());
   } catch(err){alert('Delete failed: '+err.message);}
@@ -2151,12 +2088,15 @@ function showLogin(errMsg) {
   document.getElementById('login-password').value  = '';
   sessionToken    = null;
   sessionUsername = null;
+  sessionRole     = 'user';
   localStorage.removeItem('electostock_token');
   localStorage.removeItem('electostock_username');
+  localStorage.removeItem('electostock_role');
   clearInterval(pollTimer);
 }
 
 function showApp(username) {
+  document.body.dataset.role = sessionRole;
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('main-shell').style.display = 'flex';
   document.getElementById('sidebar-username').textContent = username || '';
@@ -2175,8 +2115,10 @@ async function submitLogin() {
     const r = await api('login', { username, password });
     sessionToken    = r.token;
     sessionUsername = r.username;
+    sessionRole     = r.role || 'user';
     localStorage.setItem('electostock_token',    r.token);
     localStorage.setItem('electostock_username', r.username);
+    localStorage.setItem('electostock_role',     sessionRole);
     showApp(r.username);
     syncAll(false).then(startPolling);
   } catch(e) {

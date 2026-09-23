@@ -4,40 +4,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log. It is two files with no build system, package manager, linter, or tests:
+ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log. There is no build system or package manager:
 
 - `Code.gs`: a Google Apps Script backend bound to a Google Sheet. It exposes a JSON API through a Web App.
 - `index.html`: a standalone single-page frontend (inline CSS and JS, no framework). It is hosted separately and is **not** served by Apps Script. It calls the Web App's `/exec` URL with `fetch`.
+- `tests/`: Node tests that load `Code.gs` into a VM against in-memory fakes of the Apps Script services (`tests/fakes.js`).
+
+## Commands
+
+- Run all tests: `node --test` (Node 18+, no dependencies). Run one file with `node --test tests/api.test.js`, or one test with `node --test --test-name-pattern="checkout"`.
+- `tests/fakes.js` implements only the Sheet, Range, Lock, Cache, Content and Utilities methods that `Code.gs` currently calls. If you use a new Apps Script method, add it there.
 
 ## Deploying / running
 
 - **Backend:** paste `Code.gs` into the Sheet's Apps Script editor. Deploy it as a Web App with "Execute as: Me" and "Who has access: Anyone". **After any backend change you must publish a new version** (Deploy > Manage deployments > Edit > New version > Deploy). Otherwise the live `/exec` URL keeps serving the old code.
+- The frontend and backend share one request format, so deploy them together.
 - **One-time setup (run from the Apps Script editor's function dropdown):**
   - `installOnEditTrigger()` installs the onEdit trigger so that manual edits in the sheet bump the `last_modified` value.
-  - `setupUser1()`, or `createUser(username, password, role)`, creates or updates users. Users can only be created this way; the UI has no sign-up.
-- **Frontend:** `SHEET_URL` near the top of the `<script>` in `index.html` holds the deployed `/exec` URL. Change it to point the UI at a different sheet or deployment. To test, open `index.html` in a browser; it talks to the live backend.
+  - `setupUsers()` (edit it first) or `createUser(username, password, role)` creates or updates users. Users can only be created this way; the UI has no sign-up.
+- **Frontend:** `SHEET_URL` near the top of the `<script>` in `index.html` holds the deployed `/exec` URL.
 
 ## Architecture
 
 ### API contract (spans both files)
-- The client's `api(action, data)` sends **every** request as a GET with query params `?action=<name>&data=<JSON>`, including writes. `doGet` and `doPost` both route to `handleRequest`, which dispatches on `action` in a `switch`.
-- **To add an endpoint:** write an `actionX` function in `Code.gs`, add a `case` to the inner switch in `handleRequest`, then call `api('x', {...})` from `index.html`.
+- The client's `api(action, data)` POSTs `{action, data}` as a JSON string with `Content-Type: text/plain`, which avoids a CORS preflight that Apps Script can't answer. `doGet` refuses requests so that credentials never end up in URLs.
+- `handleRequest` checks the token and role, then `dispatch` routes on `action`.
+- **To add an endpoint:** write an `actionX` function, add it to `ACTION_ROLES` with the minimum role it needs, add a `case` in `dispatch`, then call `api('x', {...})` from `index.html`. Actions missing from `ACTION_ROLES` are rejected.
 - Responses are JSON. On failure the backend returns `{error}`, and on an auth failure `{error, auth:false}`. The client throws on `error` and sends the user back to the login screen on `auth:false`.
-- All actions except `login` and `logout` require `data.token`. `api()` attaches it automatically.
+
+### Concurrency
+- Every action that needs a role above `viewer`, plus login and logout, runs inside `withLock`: a script lock, then a `SpreadsheetApp.flush()` before the lock is released.
+- Write actions read fresh sheet data inside the lock. Don't compute a write from data the client sent when the sheet already holds it.
+- `update` is a partial update: only the fields present are written. The client sends only the fields that changed.
+
+### Auth and roles
+- Roles are `viewer` (read only), `user` (edit, adjust, checkout, BOMs, categories) and `admin` (also delete items and categories). An unknown role string counts as `viewer`.
+- The client hides buttons with the `needs-user` / `needs-admin` classes according to `body[data-role]`, but the server is what enforces the rules.
+- Password hashes are stored as `pbkdf2$<iterations>$<salt>$<hash>`. Old unsalted SHA-256 hashes still verify and are upgraded on the next login.
+- Sessions live in the hidden `Sessions` sheet, one row per login, storing a SHA-256 of the token. Validated sessions are cached in `CacheService` for 10 minutes.
+- A session's role is fixed at login. After editing a role in the sheet, run `createUser` for that user to force a re-login.
 
 ### Data storage: sheets as tables
-Each sheet is created on first access by its `get*Sheet()` helper. Column order is defined by the `*_HEADERS` constants at the top of `Code.gs`, and the code reads and writes cells **by column position**. So reordering or inserting a column means updating those constants, `rowToInvObj`, and any hard-coded column indexes (for example, the auth code uses columns 4 and 5 for token and expiry).
-- `Inventory`: items. `id` is a numeric id that is assigned as max+1. Assemblies are ordinary inventory rows that happen to have BOM lines.
-- `BOMs`: flat `parent_id, child_id, quantity` rows. Saving a BOM overwrites every line for that parent. Deleting an item also deletes every BOM row where the item is the parent or the child.
-- `Categories`, `Checkout Log` (append-only, denormalized so history survives BOM changes), `Users` (SHA-256 password hash with a fixed salt, plus the session token and its 8h expiry stored in the row).
+Each sheet is created on first access by its `get*Sheet()` helper. Column order is defined by the `*_HEADERS` constants, and the code reads and writes cells **by column position**. So reordering or inserting a column means updating those constants and `rowToInvObj`.
+- `Inventory`: items. `id` is a numeric id that is assigned as max+1 under the lock. Assemblies are ordinary inventory rows that happen to have BOM lines. `readInventory()` returns the items plus `byId` / `rowOf` maps.
+- `BOMs`: flat `parent_id, child_id, quantity` rows. `saveBOM` validates the lines (rejecting self-references, duplicates and cycles) and rewrites the sheet. Deleting an item also deletes every BOM row where the item is the parent or the child.
+- `Categories`, `Checkout Log` (append-only, denormalized so history survives BOM changes), `Users` (`username, password_hash, role`), `Sessions`.
 - `Meta`: holds a `last_modified` timestamp. Every write action calls `touchLastModified()`, so **new write actions must call it too**, or other clients won't notice the change.
 
 ### Sync model
 - On load, the client calls `getAll+getCats`, which returns items, categories, BOMs, and the timestamp in one call. It keeps everything in global arrays (`inventory`, `categories`, `boms`).
-- Every `POLL_INTERVAL_MS` (30s) the client polls `getLastModified` and runs a full silent re-sync when the timestamp has changed. Nothing else merges or diffs the data.
+- Every `POLL_INTERVAL_MS` (30s) the client polls `getLastModified` and runs a full silent re-sync when the timestamp has changed.
 
-### BOM logic lives in the client
-BOM recursion is done entirely in `index.html` against the in-memory arrays:
-- `resolveBom` / `mergeBomLines` flatten a BOM to its **leaf** components only. Intermediate sub-assemblies are expanded and never deducted themselves. Every recursive function passes a `visited` set to guard against cycles.
-- `calcBomCost` always recalculates from leaf `unit_cost` values. `propagateBomCosts` walks upward through ancestor assemblies and saves their recalculated `unit_cost` via `update` calls. An assembly's stored `unit_cost` is therefore a derived cache.
-- Checkout (`confirmBomCheckout`) sends `batchAdjustQty` (deductions floor at 0 on the server) and `logCheckout` in parallel. A failure to log does not block the checkout.
+### BOM logic
+- The server is authoritative. The pure functions in `Code.gs` (`resolveBomLeaves`, `mergeBomLines`, `buildLogComponents`, `calcBomCost`, `findAncestors`, `validateBomLines`) are unit-tested in `tests/code.test.js`.
+- A BOM flattens to its **leaf** components only. Intermediate sub-assemblies are expanded and never deducted themselves. Every recursive function carries a `visited` set.
+- `checkout` resolves the BOM from the sheet, writes the log rows and deducts stock (flooring at 0) in one locked request.
+- `recalcAssemblyCosts` rewrites the stored `unit_cost` of affected assemblies after `update` (when `unit_cost` changes), `saveBOM` and `delete`. The recalculated costs come back as `cost_updates`, and the client applies them with `applyCostUpdates`.
+- `index.html` keeps its own copies of `resolveBom` / `mergeBomLines` / `calcBomCost` for previews, cost display and pick lists. Keep them consistent with the server versions.
