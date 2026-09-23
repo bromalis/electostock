@@ -1,0 +1,9 @@
+{
+  "name": "electostock",
+  "private": true,
+  "scripts": {
+    "test": "node --test",
+    "push": "clasp push",
+    "deploy": "node --test && clasp push && clasp update-deployment AKfycbzbSuWw-DXNsrO0WFPz9mFENL_75r-g1Kt8IzYSucpEGmYndtQhY1K4-ntYtxqshUc-"
+  }
+}

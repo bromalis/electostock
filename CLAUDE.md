@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log. There is no build system or package manager:
+ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log. There is no build step, and `package.json` only holds scripts (no dependencies):
 
 - `Code.gs`: a Google Apps Script backend bound to a Google Sheet. It exposes a JSON API through a Web App.
 - `index.html`: a standalone single-page frontend (inline CSS and JS, no framework). It is hosted separately and is **not** served by Apps Script. It calls the Web App's `/exec` URL with `fetch`.
@@ -12,17 +12,21 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 
 ## Commands
 
-- Run all tests: `node --test` (Node 18+, no dependencies). Run one file with `node --test tests/api.test.js`, or one test with `node --test --test-name-pattern="checkout"`.
+- Run all tests: `npm test` or `node --test` (Node 18+, no dependencies). Run one file with `node --test tests/api.test.js`, or one test with `node --test --test-name-pattern="checkout"`.
 - `tests/fakes.js` implements only the Sheet, Range, Lock, Cache, Content and Utilities methods that `Code.gs` currently calls. If you use a new Apps Script method, add it there.
 
 ## Deploying / running
 
-- **Backend:** paste `Code.gs` into the Sheet's Apps Script editor. Deploy it as a Web App with "Execute as: Me" and "Who has access: Anyone". **After any backend change you must publish a new version** (Deploy > Manage deployments > Edit > New version > Deploy). Otherwise the live `/exec` URL keeps serving the old code.
-- The frontend and backend share one request format, so deploy them together.
+- **Backend:** deployed with [clasp](https://github.com/google/clasp), which must be logged in (`clasp login`). `.clasp.json` points at the live script, and `.claspignore` limits uploads to `Code.gs` and `appsscript.json`.
+  - `npm run push` uploads the code without changing what the live URL serves.
+  - `npm run deploy` runs the tests, uploads, then updates the live Web App deployment to a new version. The `/exec` URL stays the same.
+  - `clasp push` replaces the whole online project, so edits made only in the browser editor are lost. The repo is the source of truth.
+  - On Windows PowerShell, use `npm.cmd` / `clasp.cmd` if script execution is disabled.
+- **Frontend:** served by GitHub Pages from the root of `main` (https://bromalis.github.io/electostock/). Pushing to `main` publishes it. `SHEET_URL` near the top of the `<script>` in `index.html` holds the deployed `/exec` URL.
+- The frontend and backend share one request format. Run `npm run deploy` and push to `main` back to back.
 - **One-time setup (run from the Apps Script editor's function dropdown):**
   - `installOnEditTrigger()` installs the onEdit trigger so that manual edits in the sheet bump the `last_modified` value.
   - `setupUsers()` (edit it first) or `createUser(username, password, role)` creates or updates users. Users can only be created this way; the UI has no sign-up.
-- **Frontend:** `SHEET_URL` near the top of the `<script>` in `index.html` holds the deployed `/exec` URL.
 
 ## Architecture
 
