@@ -41,6 +41,7 @@ const ACTION_ROLES = {
   'getBOMs':         'viewer',
   'getCheckoutLog':  'viewer',
   'getLastModified': 'viewer',
+  'changePassword':  'viewer', // own password; the one write open to viewers
   'add':             'user',
   'update':          'user',
   'adjustQty':       'user',
@@ -55,11 +56,14 @@ const ACTION_ROLES = {
   'deleteUser':      'admin',
 };
 
+// Writes that viewers may make. They still need the lock.
+const VIEWER_WRITES = ['changePassword'];
+
 const LOCK_TIMEOUT_MS       = 20 * 1000;
 const TOKEN_TTL_MS          = 8 * 60 * 60 * 1000;
 const SESSION_CACHE_SECONDS = 10 * 60;
 const PBKDF2_ITERATIONS     = 2000;
-const MIN_PASSWORD_LENGTH   = 10;
+const MIN_PASSWORD_LENGTH   = 8;
 
 // ─── Sheet helpers ────────────────────────────────────────────────────────────
 
@@ -250,7 +254,8 @@ function handleRequest(e) {
     }
 
     const run = () => dispatch(action, data, auth.session);
-    return ROLE_RANK[minRole] > ROLE_RANK.viewer ? withLock(run) : run();
+    const isWrite = ROLE_RANK[minRole] > ROLE_RANK.viewer || VIEWER_WRITES.includes(action);
+    return isWrite ? withLock(run) : run();
   } catch(err) {
     return { error: err.message };
   }
@@ -282,6 +287,7 @@ function dispatch(action, data, session) {
     case 'listUsers':       return actionListUsers(session);
     case 'saveUser':        return actionSaveUser(data, session);
     case 'deleteUser':      return actionDeleteUser(data.username, session);
+    case 'changePassword':  return actionChangePassword(data, session);
   }
   return { error: 'Unknown action: ' + action };
 }
@@ -991,6 +997,26 @@ function actionSaveUser(data, session) {
   sheet.getRange(i+1, 2, 1, 2).setValues([[password ? hashPassword(password) : rows[i][1], role]]);
   // An admin changing their own password stays signed in on this device
   revokeSessionsFor(username, isSelf ? session.tokenHash : null);
+  return { success: true };
+}
+
+// Any signed-in user changing their own password. The current password is
+// required, so someone at an unattended, signed-in computer can't change it.
+// Keeps this session and signs out the user's other devices.
+// data = { current_password, new_password }
+function actionChangePassword(data, session) {
+  const current = String(data.current_password || '');
+  const next    = String(data.new_password || '');
+  const err = checkPassword(next);
+  if (err) return { error: err };
+  const sheet = getUsersSheet();
+  ensureHeaders(sheet, USER_HEADERS);
+  const rows = sheet.getDataRange().getValues();
+  const i    = findUserRow(rows, session.username);
+  if (i < 0) return { error: 'User not found: ' + session.username };
+  if (!current || !verifyPassword(current, rows[i][1])) return { error: 'Your current password is incorrect' };
+  sheet.getRange(i+1, 2).setValue(hashPassword(next));
+  revokeSessionsFor(session.username, session.tokenHash);
   return { success: true };
 }
 

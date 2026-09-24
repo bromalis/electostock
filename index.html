@@ -350,6 +350,7 @@
       <button class="nav-item" onclick="setView('history',this)"><span class="nav-icon">⏱</span> Checkout History</button>
       <button class="nav-item" onclick="exportCSV()"><span class="nav-icon">⤓</span> Export Inventory</button>
       <button class="nav-item" onclick="exportBOMs()"><span class="nav-icon">⤓</span> Export BOMs</button>
+      <button class="nav-item" onclick="openPasswordModal()"><span class="nav-icon">⚿</span> Change Password</button>
       <button class="nav-item needs-admin" onclick="openUsersModal()"><span class="nav-icon">⚇</span> Users</button>
     </nav>
     <div class="cat-filter">
@@ -614,7 +615,7 @@
         </div>
         <div class="form-group"><label class="form-label" for="new-user-pw">Password</label>
           <div class="user-pw-row">
-            <input id="new-user-pw" type="text" autocomplete="off" spellcheck="false" placeholder="At least 10 characters"/>
+            <input id="new-user-pw" type="text" autocomplete="off" spellcheck="false" placeholder="At least 8 characters"/>
             <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('new-user-pw').value=generatePassword()">Generate</button>
           </div>
           <span style="font-size:11px;color:var(--text3)">Shown in plain text so you can pass it on. You'll get one more chance to copy it after saving.</span>
@@ -628,6 +629,36 @@
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeUsersModal()">Done</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="pw-modal" onclick="if(event.target.id==='pw-modal')closePasswordModal()">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title">Change Password</div>
+      <button class="close-btn" type="button" onclick="closePasswordModal()">✕</button>
+    </div>
+    <form id="pw-form" onsubmit="event.preventDefault();changeOwnPassword()">
+      <div class="modal-body">
+        <!-- Lets the password manager tie the new password to this account -->
+        <input id="pw-username" name="username" type="text" autocomplete="username" readonly style="display:none"/>
+        <div class="form-group"><label class="form-label" for="pw-current">Current password</label>
+          <input id="pw-current" name="current-password" type="password" autocomplete="current-password" required/></div>
+        <div class="form-group"><label class="form-label" for="pw-new">New password</label>
+          <input id="pw-new" name="new-password" type="password" autocomplete="new-password" minlength="8" required placeholder="At least 8 characters"/></div>
+        <div class="form-group"><label class="form-label" for="pw-confirm">Confirm new password</label>
+          <input id="pw-confirm" name="confirm-password" type="password" autocomplete="new-password" minlength="8" required/></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer">
+          <input type="checkbox" id="pw-show" style="width:auto" onchange="togglePasswordVisibility(this.checked)"/> Show passwords
+        </label>
+        <div style="font-size:11px;color:var(--text3)">Your other devices will be signed out. You'll stay signed in here.</div>
+        <span id="pw-modal-err" style="font-size:12px;color:var(--danger);min-height:16px;display:block"></span>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" type="button" onclick="closePasswordModal()">Cancel</button>
+        <button class="btn btn-primary" type="submit" id="pw-save-btn">Change Password</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -2325,9 +2356,57 @@ function exportBOMs() {
 }
 
 // ══════════════════════════════════════════════════════════
+//  Change own password (any signed-in user)
+// ══════════════════════════════════════════════════════════
+const PW_FIELDS = ['pw-current', 'pw-new', 'pw-confirm'];
+
+function openPasswordModal() {
+  PW_FIELDS.forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pw-username').value = sessionUsername || '';
+  document.getElementById('pw-show').checked = false;
+  togglePasswordVisibility(false);
+  document.getElementById('pw-modal-err').textContent = '';
+  document.getElementById('pw-modal').classList.add('open');
+  setTimeout(() => document.getElementById('pw-current').focus(), 50);
+}
+
+function closePasswordModal() {
+  PW_FIELDS.forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pw-modal').classList.remove('open');
+}
+
+function togglePasswordVisibility(show) {
+  PW_FIELDS.forEach(id => document.getElementById(id).type = show ? 'text' : 'password');
+}
+
+async function changeOwnPassword() {
+  const current = document.getElementById('pw-current').value;
+  const next    = document.getElementById('pw-new').value;
+  const confirm = document.getElementById('pw-confirm').value;
+  const err     = document.getElementById('pw-modal-err');
+  if (!current)                           { err.textContent = 'Enter your current password.'; return; }
+  if (next.length < MIN_PASSWORD_LENGTH)  { err.textContent = `The new password needs at least ${MIN_PASSWORD_LENGTH} characters.`; return; }
+  if (next !== confirm)                   { err.textContent = "The new passwords don't match."; return; }
+  const btn = document.getElementById('pw-save-btn');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
+  err.textContent = '';
+  try {
+    await api('changePassword', { current_password: current, new_password: next });
+    offerToSavePassword(sessionUsername, next);
+    closePasswordModal();
+    showToast('Password changed. Your other devices have been signed out.');
+  } catch (e) {
+    err.textContent = 'Error: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Change Password';
+  }
+}
+
+// ══════════════════════════════════════════════════════════
 //  Users (admin only; the server enforces it too)
 // ══════════════════════════════════════════════════════════
 const ROLE_LABELS = { viewer: 'Viewer', user: 'User', admin: 'Admin' };
+const MIN_PASSWORD_LENGTH = 8; // must match MIN_PASSWORD_LENGTH in Code.gs
 let usersList = [];      // [{ username, role, active_sessions, is_self }]
 let openPwIdx = null;    // row whose "set password" field is open
 
@@ -2433,7 +2512,7 @@ function renderUserList() {
       .map(r => `<option value="${r}"${r === u.role ? ' selected' : ''}>${ROLE_LABELS[r]}</option>`).join('');
     const pwRow = openPwIdx === idx ? `
       <div class="user-pw-row">
-        <input id="user-pw-${idx}" type="text" autocomplete="off" spellcheck="false" placeholder="New password (10+ characters)"/>
+        <input id="user-pw-${idx}" type="text" autocomplete="off" spellcheck="false" placeholder="New password (8+ characters)"/>
         <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('user-pw-${idx}').value=generatePassword()">Generate</button>
         <button class="btn btn-primary btn-sm" id="user-pw-save-${idx}" onclick="saveUserPassword(${idx})">Save</button>
       </div>` : '';
@@ -2478,7 +2557,7 @@ async function changeUserRole(idx, select) {
 async function saveUserPassword(idx) {
   const u = usersList[idx];
   const password = document.getElementById('user-pw-' + idx).value;
-  if (password.length < 10) { setUsersError('Passwords need at least 10 characters.'); return; }
+  if (password.length < MIN_PASSWORD_LENGTH) { setUsersError(`Passwords need at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
   const btn = document.getElementById('user-pw-save-' + idx);
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
   setUsersError('');
@@ -2518,7 +2597,7 @@ async function addUser() {
   const role     = document.getElementById('new-user-role').value;
   const password = document.getElementById('new-user-pw').value;
   if (!/^[A-Za-z0-9._@-]{1,40}$/.test(username)) { setUsersError('Usernames are 1-40 letters, numbers or . _ @ -'); return; }
-  if (password.length < 10) { setUsersError('Passwords need at least 10 characters.'); return; }
+  if (password.length < MIN_PASSWORD_LENGTH) { setUsersError(`Passwords need at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
   const btn = document.getElementById('add-user-btn');
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
   setUsersError('');

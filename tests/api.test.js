@@ -266,3 +266,30 @@ test('own password change keeps this session even if it was cached by older code
   assert.ok(as('ada', 'saveUser', { username: 'ada', role: 'admin', password: 'new-admin-password' }).success);
   assert.ok(as('ada', 'getAll').items);
 });
+
+// ── Changing your own password ──────────────────────────────────────────────
+
+test('any signed-in user can change their own password with the current one', () => {
+  const { app, as } = setup();
+  const otherDevice = app.call('login', { username: 'vic', password: 'viewer-password-1' }).token;
+  assert.ok(as('vic', 'changePassword', { current_password: 'viewer-password-1', new_password: 'vics-new-pw' }).success);
+  assert.ok(as('vic', 'getAll').items);                                  // this session kept
+  assert.equal(app.call('getAll', { token: otherDevice }).auth, false);  // other devices signed out
+  assert.match(app.call('login', { username: 'vic', password: 'viewer-password-1' }).error, /Invalid/);
+  assert.ok(app.call('login', { username: 'vic', password: 'vics-new-pw' }).token);
+  assert.ok(as('uma', 'changePassword', { current_password: 'user-password-12', new_password: 'umas-new-pw' }).success);
+});
+
+test('changing your own password needs the right current password and a long enough new one', () => {
+  const { as } = setup();
+  assert.match(as('vic', 'changePassword', { current_password: 'wrong', new_password: 'vics-new-pw' }).error, /current password/);
+  assert.match(as('vic', 'changePassword', { new_password: 'vics-new-pw' }).error, /current password/);
+  assert.match(as('vic', 'changePassword', { current_password: 'viewer-password-1', new_password: 'short7!' }).error, /at least 8/);
+});
+
+test('passwords of exactly 8 characters are accepted', () => {
+  const { app, as } = setup();
+  assert.ok(as('ada', 'saveUser', { username: 'eight', role: 'viewer', password: '8chars!!', create: true }).created);
+  assert.ok(app.call('login', { username: 'eight', password: '8chars!!' }).token);
+  assert.doesNotThrow(() => app.ctx.createUser('eight', '12345678', 'viewer'));
+});
