@@ -4,87 +4,76 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log. There is no build step, and `package.json` only holds scripts (no dependencies):
+ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log.
 
-- `Code.gs`: a Google Apps Script backend bound to a Google Sheet. It exposes a JSON API through a Web App.
-- `index.html`: a standalone single-page frontend (inline CSS and JS, no framework). It is hosted separately and is **not** served by Apps Script. It calls the Web App's `/exec` URL with `fetch`.
-- `tests/`: Node tests that load `Code.gs` into a VM against in-memory fakes of the Apps Script services (`tests/fakes.js`).
+- `index.html`: a standalone single-page frontend (inline CSS and JS, no framework, no build step). It is served by GitHub Pages and talks to Supabase through `supabase-js`, loaded from jsDelivr and pinned with an SRI hash.
+- `supabase/migrations/*.sql`: the whole backend. It contains the Postgres schema, the row-level security (RLS) policies, the triggers and the database functions.
+- `scripts/import-sheet.mjs`: a one-off import from CSV exports of the old Google Sheet.
+- `Code.gs`: the legacy Google Apps Script backend, bound to the old Google Sheet. It is being retired; see "Legacy Apps Script" below.
+- `tests/`:
+  - `tests/db/`: tests that run the migrations against PGlite (Postgres compiled to WebAssembly).
+  - `tests/import.test.mjs`: tests for the import script.
+  - `tests/*.test.js`: tests for the legacy `Code.gs`, run against in-memory fakes in `tests/fakes.js`.
 
 ## Commands
 
-- Run all tests: `npm test` or `node --test` (Node 18+, no dependencies). Run one file with `node --test tests/api.test.js`, or one test with `node --test --test-name-pattern="checkout"`.
-- `tests/fakes.js` implements only the Sheet, Range, Lock, Cache, Content and Utilities methods that `Code.gs` currently calls. If you use a new Apps Script method, add it there.
+- Run all tests with `npm test` (`node --test`, Node 18+). Run one file with `node --test tests/db/schema.test.mjs`, or one test with `node --test --test-name-pattern="checkout"`. GitHub Actions (`.github/workflows/test.yml`) runs the tests on every push.
+- `npm install` fetches the only dependency, `@electric-sql/pglite`. It is a dev dependency, used by the database tests.
+- Import from the sheet: `node scripts/import-sheet.mjs <folder with the CSVs> [out.sql]`, then run the generated SQL in the Supabase SQL Editor. The script replaces all inventory data and leaves users alone. The generated SQL contains real data, so keep it out of the repo.
 
-## Deploying / running
+## Deploying
 
-- **Backend:** deployed with [clasp](https://github.com/google/clasp), which must be logged in (`clasp login`). `.clasp.json` points at the live script, and `.claspignore` limits uploads to `Code.gs` and `appsscript.json`.
-  - `npm run push` uploads the code without changing what the live URL serves.
-  - `npm run deploy` runs the tests, uploads, then updates the live Web App deployment to a new version. The `/exec` URL stays the same.
-  - `clasp push` replaces the whole online project, so edits made only in the browser editor are lost. The repo is the source of truth.
-  - The scripts use `clasp push -f`. Without `-f`, clasp stops to ask before overwriting the manifest. Run non-interactively, it prints "Skipping push." and exits 0, so `update-deployment` then republishes the **old** code.
-  - After a deploy, check the live version with `clasp clone <scriptId> <version>` into a scratch folder and diff it against `Code.gs`.
-  - Google Workspace makes you sign in again periodically. If clasp fails with `invalid_rapt`, run `clasp login` again.
-  - On Windows PowerShell, use `npm.cmd` / `clasp.cmd` if script execution is disabled.
-- **Frontend:** served by GitHub Pages from the root of `main` (https://bromalis.github.io/electostock/). Pushing to `main` publishes it. `SHEET_URL` near the top of the `<script>` in `index.html` holds the deployed `/exec` URL.
-- The frontend and backend share one request format. Run `npm run deploy` and push to `main` back to back.
-- **One-time setup (run from the Apps Script editor's function dropdown):**
-  - `installOnEditTrigger()` installs the onEdit trigger so that manual edits in the sheet bump the `last_modified` value.
-  - Admins manage users in the app (sidebar > Users). `createUser(username, password, role)` in the editor does the same job and is only needed to create the first admin. There's no self sign-up.
+- **Frontend:** pushing to `main` publishes it on GitHub Pages at https://bromalis.github.io/electostock/. `SUPABASE_URL` and `SUPABASE_KEY` sit at the top of the main `<script>`. The key is the *publishable* key, which is public by design. Never put a `service_role` or secret key in the page.
+- **Database:** migrations are applied by pasting them into the Supabase SQL Editor, once each, in filename order. Add changes as a **new** migration file; never edit one that has already been applied. `tests/db/harness.mjs` runs every file in `supabase/migrations/` in order, so the tests always cover the full chain.
+- **Auth settings** live in the Supabase dashboard, not in the repo:
+  - Site URL and Redirect URLs must include every page origin that sends emailed links, including `http://localhost:8765/` for local testing.
+  - Email sign-ups must stay **enabled**. Invite-only is enforced by the `handle_new_user` trigger.
+  - Minimum password length is 8, the same as `MIN_PASSWORD_LENGTH` in `index.html`.
+- **Local testing:** serve `index.html` at `http://localhost:8765/`. It talks to the real project, so use obviously named test data and remove it afterwards.
 
 ## Architecture
 
-### API contract (spans both files)
-- The client's `api(action, data)` POSTs `{action, data}` as a JSON string with `Content-Type: text/plain`, which avoids a CORS preflight that Apps Script can't answer. `doGet` refuses requests so that credentials never end up in URLs.
-- `handleRequest` checks the token and role, then `dispatch` routes on `action`.
-- **To add an endpoint:** write an `actionX` function, add it to `ACTION_ROLES` with the minimum role it needs, add a `case` in `dispatch`, then call `api('x', {...})` from `index.html`. Actions missing from `ACTION_ROLES` are rejected.
-- Responses are JSON. On failure the backend returns `{error}`, and on an auth failure `{error, auth:false}`. The client throws on `error` and sends the user back to the login screen on `auth:false`.
-- Apps Script replies through a one-time redirect to `script.googleusercontent.com` that intermittently returns 404 even when the script ran. `api()` retries the reads listed in `RETRYABLE_ACTIONS`. It never retries a write, because the write may already have been applied; instead it re-syncs and shows a "may or may not have been saved" error. New read-only actions belong in `RETRYABLE_ACTIONS`; writes must not go there.
+### Data layer (`index.html`)
+- `api(action, data)` keeps the action names and response shapes that the screens were written against. Each action in `ACTIONS` maps to a supabase-js query or an RPC call. Add new backend calls there.
+- `ok()` unwraps `{data, error}` and turns Postgres errors into readable messages.
+- An update or delete that RLS blocks affects zero rows **without** raising an error. Pass the result through `changed()` (together with `.select()`) so the user sees an error.
+- Numeric columns are Postgres `numeric`. `toItem()` / `num()` convert them to JS numbers.
 
-### Concurrency
-- Every action that needs a role above `viewer`, plus login and logout, runs inside `withLock`: a script lock, then a `SpreadsheetApp.flush()` before the lock is released.
-- Write actions read fresh sheet data inside the lock. Don't compute a write from data the client sent when the sheet already holds it.
-- `update` is a partial update: only the fields present are written. The client sends only the fields that changed.
+### Permissions (database)
+- Roles live in `profiles.role` (`viewer` < `user` < `admin`), and every RLS policy checks them through `has_role()`. A role change takes effect on the user's next request. The page re-reads the role on every sync to update which buttons it shows (`body[data-role]` + `.needs-user` / `.needs-admin`).
+- Sign-up is invite-only. `admin_invite()` stores an email and role in `invites`, and the `handle_new_user` trigger on `auth.users` rejects any email that hasn't been invited.
+- `checkout_log` has no insert policy: only `checkout()` (a security definer function) writes to it.
+- User admin goes through `admin_*` functions. Their guards: admins can't change their own role or delete themselves, and the `keep_one_admin` trigger ensures at least one admin always remains.
+- Grants: `anon` gets nothing. `authenticated` gets table access (RLS decides) plus EXECUTE on the listed functions. New functions need an explicit `grant execute`.
 
-### Auth and roles
-- Roles are `viewer` (read only), `user` (edit, adjust, checkout, BOMs, categories) and `admin` (also delete items and categories). An unknown role string counts as `viewer`.
-- The client hides buttons with the `needs-user` / `needs-admin` classes according to `body[data-role]`, but the server is what enforces the rules.
-- Password hashes are stored as `pbkdf2$<iterations>$<salt>$<hash>`. Old unsalted SHA-256 hashes still verify and are upgraded on the next login.
-- Sessions live in the hidden `Sessions` sheet, one row per login, storing a SHA-256 of the token. Validated sessions are cached in `CacheService` for 10 minutes.
-- A session's role is fixed at login. Changing a user's role or password through `saveUser` (or `createUser`) signs them out everywhere, so the new role applies at their next login. An admin changing their own password keeps only the current session. If you edit a role directly in the sheet, nothing is signed out.
-- `validateToken` sets `session.tokenHash` on every call rather than reading it from the cache, because entries cached by older deployments don't have it. Anything added to the session object later must be handled the same way, or be optional, since the cache can hold old-shape entries for up to 10 minutes after a deploy.
-- Passwords can't be read back. After one is set, the Users dialog shows it once with a Copy button. For the admin's own password (and on every login) it calls `offerToSavePassword`, which uses `navigator.credentials.store` to bring up Chrome's save/update prompt; other browsers skip this. The login fields sit in a real `<form>` with `autocomplete` attributes so password managers recognise them.
-- Every signed-in user, viewers included, can change their own password (sidebar > Change Password). `changePassword` requires the current password, keeps the caller's session and signs out their other devices. It's listed in `VIEWER_WRITES`, so it runs under the lock despite being a viewer-level action; any other write open to viewers must be added there too.
-- Minimum password length is `MIN_PASSWORD_LENGTH` (8), defined in both `Code.gs` and `index.html`. Keep the two in sync.
-- User management actions (`listUsers`, `saveUser`, `deleteUser`) are admin-only. Admins can't change their own role or delete themselves, and there is always at least one admin. `dispatch` receives the caller's `session`, including its `tokenHash`, for these checks.
-
-### Data storage: sheets as tables
-Each sheet is created on first access by its `get*Sheet()` helper. Column order is defined by the `*_HEADERS` constants, and the code reads and writes cells **by column position**. So reordering or inserting a column means updating those constants and `rowToInvObj`.
-- `Inventory`: items. `id` is a numeric id that is assigned as max+1 under the lock. Assemblies are ordinary inventory rows that happen to have BOM lines. `readInventory()` returns the items plus `byId` / `rowOf` maps.
-- `BOMs`: flat `parent_id, child_id, quantity` rows. `saveBOM` validates the lines (rejecting self-references, duplicates and cycles) and rewrites the sheet. Deleting an item also deletes every BOM row where the item is the parent or the child.
-- `Categories`, `Checkout Log` (append-only, denormalized so history survives BOM changes), `Users` (`username, password_hash, role`), `Sessions`.
-- `Meta`: holds a `last_modified` timestamp. Every write action calls `touchLastModified()`, so **new write actions must call it too**, or other clients won't notice the change.
-
-### Sync model
-- On load, the client calls `getAll+getCats`, which returns items, categories, BOMs, and the timestamp in one call. It keeps everything in global arrays (`inventory`, `categories`, `boms`).
-- Every `POLL_INTERVAL_MS` (30s) the client polls `getLastModified` and runs a full silent re-sync when the timestamp has changed.
-- Every request is a separate Apps Script execution. When executions overlap, Google starts extra script instances, which adds 10–30 s of latency even though the script itself runs in under 2 s. So:
-  - `poll()` never overlaps another poll or a sync, and it skips hidden tabs. A tab polls straight away when it becomes visible again.
-  - `api()` retries only fast failures. A timed-out request (`REQUEST_TIMEOUT_MS`) may still be running on Google's side, so it isn't retried.
-
-### BOM logic
-- The server is authoritative. The pure functions in `Code.gs` (`resolveBomLeaves`, `mergeBomLines`, `buildLogComponents`, `calcBomCost`, `findAncestors`, `validateBomLines`) are unit-tested in `tests/code.test.js`.
-- A BOM flattens to its **leaf** components only. Intermediate sub-assemblies are expanded and never deducted themselves. Every recursive function carries a `visited` set.
-- BOM quantities may be **negative, but never 0**. A negative line (on a component or a nested BOM) subtracts, so a sub-assembly can cancel parts that another one adds. After merging, each component's net is one of:
+### BOM logic (database is authoritative)
+- `bom_lines.quantity` may be **negative, but never 0**. After merging, each component's net is one of:
   - positive: deducted;
-  - zero: cancels out, and the row isn't touched;
+  - zero: untouched;
   - negative: returned to stock.
   Costs can therefore also be zero or negative.
-- `checkout` resolves the BOM from the sheet, writes the log rows and applies the net stock changes (deductions floor at 0) in one locked request. The log keeps one row per path, including negative ones.
-- `recalcAssemblyCosts` rewrites the stored `unit_cost` of affected assemblies after `update` (when `unit_cost` changes), `saveBOM` and `delete`. The recalculated costs come back as `cost_updates`, and the client applies them with `applyCostUpdates`.
-- `index.html` keeps its own copies of `resolveBom` / `mergeBomLines` / `calcBomCost` for previews, cost display and pick lists. Keep them consistent with the server versions.
-- `getWhereUsed` / `countInAssembly` in `index.html` power the detail panel's "Used In" section. It lists every assembly containing the item, directly or through sub-assemblies, with the net count per unit.
-- Format money with `fmtMoney` so negative costs read `−$0.50`.
+- Cost rollups are triggers. `items_before_write` recalculates an assembly's `unit_cost` from its leaves (`bom_cost()`) whenever its row is written. A change to any item's cost "touches" that item's direct parents, and the recalculation cascades all the way up. As a result, an assembly's cost can't be set by hand.
+- `bom_prevent_cycles` rejects any line that would create a loop, however the line is written.
+- `checkout()`, `save_bom()` and `adjust_qty()` each run as a single transaction. The checkout log keeps one row per path, including negative rows, and records `user_email`.
+- `index.html` keeps its own copies of `resolveBom` / `mergeBomLines` / `calcBomCost` / `getWhereUsed` for previews, cost display, pick lists and the "Used In" panel. Keep them consistent with the SQL.
+
+### Auth flows (`index.html`)
+- supabase-js runs with `flowType: 'implicit'`. Emailed links, including invites requested from an admin's browser, must work on any device, which the default PKCE flow can't do.
+- `handleAuthEvent` handles four cases:
+  - `INITIAL_SESSION` / `SIGNED_IN` call `startSession`, which loads the role, runs the first sync and starts live updates.
+  - `PASSWORD_RECOVERY` opens the password dialog in `recovery` mode.
+  - A user without `user_metadata.password_set` (someone who arrived from an invite link) gets the dialog in `first` mode.
+- Changing your own password first re-checks the current password with `signInWithPassword`, then calls `updateUser`, then signs out other devices.
+- After a successful password sign-in or password change, `offerToSavePassword` triggers Chrome's save/update prompt.
+
+### Live updates
+- A realtime channel on `items`, `bom_lines` and `categories` triggers a debounced silent `syncAll`. The page doesn't poll. `syncAll` queues a second run if a change arrives while a sync is already in progress.
 
 ### Theme
-- Colours are CSS custom properties on `:root` (dark). `:root[data-theme="light"]` overrides them. Use the tokens (`--danger-text`, `--warn-text`, `--bom`, `--on-accent`, `--overlay`, …) rather than hard-coded colours. The printed pick list is the exception and stays black on white.
-- A small script in `<head>` sets `data-theme` before first paint. It uses the saved `electostock_theme` value from localStorage, or the device setting if there isn't one. `toggleTheme()` saves the choice.
+- Colours are CSS custom properties on `:root` (dark), overridden by `:root[data-theme="light"]`. Use the tokens rather than hard-coded colours; the printed pick list is the exception and stays black on white.
+- A script in `<head>` sets `data-theme` before first paint, from the saved `electostock_theme` value or the device setting.
+- Format money with `fmtMoney` so negative values read `−$0.50`.
+
+## Legacy Apps Script
+
+`Code.gs` and its clasp setup (`.clasp.json`, `.claspignore`, `appsscript.json`, and the `push` / `deploy` npm scripts) belong to the old Google Sheet backend. `clasp push` replaces the whole online project, and clasp may need `clasp login` again whenever Google Workspace asks you to sign in again.
