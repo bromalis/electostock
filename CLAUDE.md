@@ -9,7 +9,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - `index.html`: a standalone single-page frontend (inline CSS and JS, no framework, no build step). It is served by GitHub Pages and talks to Supabase through `supabase-js`, loaded from jsDelivr and pinned with an SRI hash.
 - `supabase/migrations/*.sql`: the whole backend. It contains the Postgres schema, the row-level security (RLS) policies, the triggers and the database functions.
 - `scripts/import-sheet.mjs`: a one-off import from CSV exports of the old Google Sheet.
-- `Code.gs`: Apps Script bound to the old Google Sheet. It keeps a read-only copy of the data there, refreshed hourly, and answers any old copy of the app with "moved". See "Google Sheet copy" below.
+- `Code.gs`: Apps Script bound to the old Google Sheet. It keeps a read-only copy of the data there, refreshed hourly, and answers any old copy of the app with "moved". It is deployed with clasp; `.clasp.json`, `.claspignore` and `appsscript.json` belong to it. See "Google Sheet copy" below.
 - `tests/`:
   - `tests/db/`: tests that run the migrations against PGlite (Postgres compiled to WebAssembly).
   - `tests/import.test.mjs`: tests for the import script.
@@ -27,6 +27,9 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   1. `database` runs `supabase db push`, which applies any migrations in `supabase/migrations/` the project hasn't run yet.
   2. `pages` publishes `index.html` alone to GitHub Pages at https://bromalis.github.io/electostock/.
   The database job uses the repository secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`.
+  - GitHub Pages is set to Source: GitHub Actions, so only this workflow publishes the site. A push whose tests fail changes nothing live.
+  - The Supabase access token expires. When the `database` job starts failing on authentication, generate a new token in Supabase (Account > Access Tokens, scoped to the project) and update the secret.
+  - Pushing a change to `.github/workflows/` needs a GitHub login with the `workflow` scope. On this machine, the git credential manager's token lacks it, while the `gh` login has it. Push those changes with `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push`.
 - **Migrations:** add changes as a **new** migration file named `<yyyymmddhhmmss>_<name>.sql`; never edit one that has already been applied. The database is updated a minute before the page, so migrations must keep working with the page currently live: add tables, columns and functions, and remove old ones only in a later release, once the page no longer uses them. `tests/db/harness.mjs` runs every migration in order, so the tests always cover the full chain. Don't apply migrations by pasting them into the SQL Editor: the pipeline wouldn't know they ran. If one ever is applied by hand, record it with `supabase migration repair --status applied <version>`.
 - **Page config:** `SUPABASE_URL` and `SUPABASE_KEY` sit at the top of the main `<script>`. The key is the *publishable* key, which is public by design. Never put a `service_role` or secret key in the page.
 - **Auth settings** live in the Supabase dashboard, not in the repo:
@@ -35,7 +38,8 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   - Minimum password length is 8, the same as `MIN_PASSWORD_LENGTH` in `index.html`.
   - Email goes out over custom SMTP. For now that is Gmail (`smtp.gmail.com:465`, sending as ben@aerolab.com with an app password), a stopgap until Resend on `mail.aerolab.com` is set up. Supabase's built-in sender only delivers to members of the Supabase organisation.
   - The wording of the invite, sign-in-link and reset emails lives in Authentication > Emails > Templates. First-time invites use the "Confirm signup" template, because `signInWithOtp` creates the user; existing users get "Magic Link"; resets use "Reset Password".
-- **Local testing:** serve `index.html` at `http://localhost:8765/`. It talks to the real project, so use obviously named test data and remove it afterwards.
+- **Local testing:** from the repo root, run `python -m http.server 8765` and open http://localhost:8765/. That origin is in the project's Redirect URLs, so emailed links work. The page talks to the **real** project, so use obviously named test data and remove it afterwards.
+- **If the site suddenly can't load data:** the Supabase free plan pauses a project after about a week without activity. Restore it from the Supabase dashboard; no data is lost.
 
 ## Architecture
 
@@ -87,4 +91,4 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   - It rewrites the Inventory, Categories, BOMs and Checkout Log tabs, keeping the old column order with any new columns appended, and protects them so only the owner can edit.
 - The token is in Script Properties as `EXPORT_TOKEN`. The database stores only its SHA-256. A new token comes from `select public.create_export_token();` in the SQL Editor; `delete from public.export_tokens;` revokes all tokens.
 - `doGet` / `doPost` return "ElectoStock has moved", so an old copy of the page still open somewhere can't write to the sheet.
-- Deploy with `npm run deploy`: it runs the tests, then `clasp push -f`, then updates the old web-app deployment. `clasp push` replaces the whole online project. clasp may need `clasp login` again whenever Google Workspace asks you to sign in again; the error is `invalid_rapt`. Without `-f`, clasp prints "Skipping push." and exits 0, so always check what actually went live.
+- Deploy with `npm run deploy` (on Windows PowerShell, `npm.cmd run deploy`). It runs the tests, then `clasp push -f`, then updates the old web-app deployment. `npm run push` does only the upload, which is enough for the hourly refresh because triggers run the latest uploaded code. The pipeline doesn't deploy this script, so deploy it by hand whenever `Code.gs` or `appsscript.json` changes. `clasp push` replaces the whole online project, so make changes in the repo, not in the online editor. clasp may need `clasp login` again whenever Google Workspace asks you to sign in again; the error is `invalid_rapt`. Without `-f`, clasp prints "Skipping push." and exits 0, so always check what actually went live.
