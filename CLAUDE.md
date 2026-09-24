@@ -23,6 +23,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 
 ## Deploying
 
+- **Workflow:** `main` is the only long-lived branch, and pushing to it deploys. For anything non-trivial, work on a branch: pushing it runs the tests without deploying. Merge into `main` when ready, then delete the branch.
 - **Pipeline** (`.github/workflows/deploy.yml`): every push runs the tests. On `main`, if they pass, two more jobs run:
   1. `database` runs `supabase db push`, which applies any migrations in `supabase/migrations/` the project hasn't run yet.
   2. `pages` publishes `index.html` alone to GitHub Pages at https://bromalis.github.io/electostock/.
@@ -36,6 +37,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   - Site URL and Redirect URLs must include every page origin that sends emailed links, including `http://localhost:8765/` for local testing.
   - Email sign-ups must stay **enabled**. Invite-only is enforced by the `handle_new_user` trigger.
   - Minimum password length is 8, the same as `MIN_PASSWORD_LENGTH` in `index.html`.
+  - Emailed links (invites, sign-in links, password resets) stay valid for 1 hour (Email > "Email OTP expiration" = 3600). The app's "expires in an hour" message and the email templates say the same, so update all three together. Supabase allows at most 24 hours. An expired invite isn't a problem: the account already exists, so "Email me a sign-in link" on the login screen, or "Resend invite" in the Users dialog, sends a fresh link.
   - Email goes out over custom SMTP. For now that is Gmail (`smtp.gmail.com:465`, sending as ben@aerolab.com with an app password), a stopgap until Resend on `mail.aerolab.com` is set up. Supabase's built-in sender only delivers to members of the Supabase organisation.
   - The wording of the invite, sign-in-link and reset emails lives in Authentication > Emails > Templates. First-time invites use the "Confirm signup" template, because `signInWithOtp` creates the user; existing users get "Magic Link"; resets use "Reset Password".
 - **Local testing:** from the repo root, run `python -m http.server 8765` and open http://localhost:8765/. That origin is in the project's Redirect URLs, so emailed links work. The page talks to the **real** project, so use obviously named test data and remove it afterwards.
@@ -88,7 +90,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 
 - `refreshSheetCopy()` runs every hour on a time trigger, installed once with `installHourlyRefresh()`.
   - It calls `export_snapshot(p_token)` (migration `…_sheet_export.sql`) as the anonymous API role, sending the publishable key in the `apikey` header only.
-  - It rewrites the Inventory, Categories, BOMs and Checkout Log tabs, keeping the old column order with any new columns appended, and protects them so only the owner can edit.
+  - It rewrites the Inventory, Categories, BOMs and Checkout Log tabs, keeping the old column order with any new columns appended, and protects them so only the owner can edit. It also writes an "About this copy" tab. The old backend's Users, Sessions and Meta tabs, which held password hashes, have been deleted; nothing uses them.
 - The token is in Script Properties as `EXPORT_TOKEN`. The database stores only its SHA-256. A new token comes from `select public.create_export_token();` in the SQL Editor; `delete from public.export_tokens;` revokes all tokens.
 - `doGet` / `doPost` return "ElectoStock has moved", so an old copy of the page still open somewhere can't write to the sheet.
 - Deploy with `npm run deploy` (on Windows PowerShell, `npm.cmd run deploy`). It runs the tests, then `clasp push -f`, then updates the old web-app deployment. `npm run push` does only the upload, which is enough for the hourly refresh because triggers run the latest uploaded code. The pipeline doesn't deploy this script, so deploy it by hand whenever `Code.gs` or `appsscript.json` changes. `clasp push` replaces the whole online project, so make changes in the repo, not in the online editor. clasp may need `clasp login` again whenever Google Workspace asks you to sign in again; the error is `invalid_rapt`. Without `-f`, clasp prints "Skipping push." and exits 0, so always check what actually went live.
