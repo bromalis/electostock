@@ -35,6 +35,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - `handleRequest` checks the token and role, then `dispatch` routes on `action`.
 - **To add an endpoint:** write an `actionX` function, add it to `ACTION_ROLES` with the minimum role it needs, add a `case` in `dispatch`, then call `api('x', {...})` from `index.html`. Actions missing from `ACTION_ROLES` are rejected.
 - Responses are JSON. On failure the backend returns `{error}`, and on an auth failure `{error, auth:false}`. The client throws on `error` and sends the user back to the login screen on `auth:false`.
+- Apps Script replies through a one-time redirect to `script.googleusercontent.com` that intermittently returns 404 even when the script ran. `api()` retries the reads listed in `RETRYABLE_ACTIONS`. It never retries a write, because the write may already have been applied; instead it re-syncs and shows a "may or may not have been saved" error. New read-only actions belong in `RETRYABLE_ACTIONS`; writes must not go there.
 
 ### Concurrency
 - Every action that needs a role above `viewer`, plus login and logout, runs inside `withLock`: a script lock, then a `SpreadsheetApp.flush()` before the lock is released.

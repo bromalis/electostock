@@ -621,21 +621,57 @@ let historyEntries = [];
 // ══════════════════════════════════════════════════════════
 //  API
 // ══════════════════════════════════════════════════════════
+// Apps Script replies through a one-time redirect that intermittently fails
+// (404 or no response) even when the script itself ran. Reads are safe to retry.
+// Writes are not: the change may already be saved, so instead of retrying we
+// refresh the data and tell the user to check before trying again.
+const RETRYABLE_ACTIONS = new Set([
+  'login', 'logout', 'getAll', 'getAll+getCats', 'getCats', 'getBOMs', 'getCheckoutLog', 'getLastModified',
+]);
+const RETRY_DELAYS_MS    = [1000, 3000];
+const REQUEST_TIMEOUT_MS = 60_000;
+
+// One round trip. Throws on any transport failure (network, timeout, non-2xx, non-JSON).
+async function postToBackend(action, data) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    // POST keeps passwords and tokens out of URLs. text/plain avoids a CORS
+    // preflight, which Apps Script web apps can't answer.
+    const res = await fetch(SHEET_URL, {
+      method:   'POST',
+      redirect: 'follow',
+      headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
+      body:     JSON.stringify({ action, data }),
+      signal:   controller.signal,
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function api(action, data = {}) {
   // Include session token with every request (login doesn't need one)
   if (action !== 'login' && action !== 'logout' && sessionToken) {
     data = { ...data, token: sessionToken };
   }
-  // POST keeps passwords and tokens out of URLs. text/plain avoids a CORS
-  // preflight, which Apps Script web apps can't answer.
-  const res = await fetch(SHEET_URL, {
-    method:   'POST',
-    redirect: 'follow',
-    headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
-    body:     JSON.stringify({ action, data }),
-  });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const json = await res.json();
+  let json;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      json = await postToBackend(action, data);
+      break;
+    } catch (err) {
+      if (!RETRYABLE_ACTIONS.has(action)) {
+        syncAll(true);
+        throw new Error('No reply from Google Sheets, so this may or may not have been saved. '
+          + 'The data has been refreshed: check it before trying again.');
+      }
+      if (attempt >= RETRY_DELAYS_MS.length) throw err;
+      await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+    }
+  }
   // If server says not authenticated, kick back to login
   if (json.auth === false) { showLogin(json.error); throw new Error(json.error); }
   if (json.error) throw new Error(json.error);
@@ -759,6 +795,10 @@ async function syncAll(silent = false) {
       document.getElementById('inv-table').style.display = 'table';
     }
     if (selectedId) renderDetail(selectedId);
+    // Keep an open checkout preview in step with the fresh stock levels
+    if (bomCoData && document.getElementById('bom-checkout-modal').classList.contains('open')) {
+      refreshBomCheckoutPreview(bomCoData.parentId);
+    }
   } catch(err) {
     setSyncStatus('error', 'Connection failed');
     if (!silent) {
