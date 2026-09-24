@@ -268,7 +268,8 @@
   .login-subtitle{font-size:13px;color:var(--text3);}
   .login-err{font-size:12px;color:var(--danger);min-height:16px;text-align:center;}
   .login-footer{font-size:11px;color:var(--text3);text-align:center;font-family:var(--mono);}
-  .login-user-badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);font-family:var(--mono);}
+  .login-user-badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);font-family:var(--mono);min-width:0;}
+  .login-user-badge #sidebar-username{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .login-user-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
   .bom-qty-neg{color:var(--warn) !important;}
   .user-list{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;padding-right:2px;}
@@ -339,11 +340,11 @@
     <div class="logo">
       <div class="logo-mark">⬡ ElectoStock</div>
       <div class="logo-name">Inventory</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;">
         <div class="login-user-badge"><span class="login-user-dot"></span><span id="sidebar-username"></span></div>
-        <span style="display:flex;align-items:center;gap:6px">
+        <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <button class="theme-toggle" onclick="toggleTheme()"></button>
-          <button class="cat-manage-btn" onclick="logout()" style="font-size:11px">Sign out</button>
+          <button class="cat-manage-btn" onclick="logout()" style="font-size:11px;white-space:nowrap">Sign out</button>
         </span>
       </div>
     </div>
@@ -2728,6 +2729,7 @@ function showApp(email) {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('main-shell').style.display = 'flex';
   document.getElementById('sidebar-username').textContent = email || '';
+  document.getElementById('sidebar-username').title       = email || '';
 }
 
 function setLoginInfo(msg) {
