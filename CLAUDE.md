@@ -51,6 +51,8 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - Password hashes are stored as `pbkdf2$<iterations>$<salt>$<hash>`. Old unsalted SHA-256 hashes still verify and are upgraded on the next login.
 - Sessions live in the hidden `Sessions` sheet, one row per login, storing a SHA-256 of the token. Validated sessions are cached in `CacheService` for 10 minutes.
 - A session's role is fixed at login. Changing a user's role or password through `saveUser` (or `createUser`) signs them out everywhere, so the new role applies at their next login. An admin changing their own password keeps only the current session. If you edit a role directly in the sheet, nothing is signed out.
+- `validateToken` sets `session.tokenHash` on every call rather than reading it from the cache, because entries cached by older deployments don't have it. Anything added to the session object later must be handled the same way, or be optional, since the cache can hold old-shape entries for up to 10 minutes after a deploy.
+- Passwords can't be read back. After one is set, the Users dialog shows it once with a Copy button. For the admin's own password (and on every login) it calls `offerToSavePassword`, which uses `navigator.credentials.store` to bring up Chrome's save/update prompt; other browsers skip this. The login fields sit in a real `<form>` with `autocomplete` attributes so password managers recognise them.
 - User management actions (`listUsers`, `saveUser`, `deleteUser`) are admin-only. Admins can't change their own role or delete themselves, and there is always at least one admin. `dispatch` receives the caller's `session`, including its `tokenHash`, for these checks.
 
 ### Data storage: sheets as tables

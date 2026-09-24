@@ -279,6 +279,9 @@
   .user-row select{width:auto;padding:4px 8px;font-size:12px;}
   .user-pw-row{display:flex;gap:6px;align-items:center;}
   .user-pw-row input{font-family:var(--mono);font-size:12px;padding:5px 8px;}
+  .pw-notice{background:var(--accent-dim);border:1px solid var(--accent2);border-radius:var(--radius);padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text2);}
+  .pw-notice-row{display:flex;gap:6px;align-items:center;}
+  .pw-notice code{flex:1;min-width:0;font-family:var(--mono);font-size:13px;color:var(--text);background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:5px 8px;user-select:all;overflow-wrap:anywhere;}
   .role-help{font-size:11px;color:var(--text3);line-height:1.6;}
   .role-help b{color:var(--text2);font-weight:500;}
   .theme-toggle{font-size:13px;line-height:1;color:var(--text3);background:none;border:1px solid var(--border2);border-radius:var(--radius);cursor:pointer;padding:3px 6px;transition:color .15s,border-color .15s;}
@@ -298,20 +301,21 @@
       <div class="login-logo-name">Inventory</div>
       <div class="login-subtitle">Sign in to continue</div>
     </div>
+    <form id="login-form" onsubmit="event.preventDefault();submitLogin()" style="display:flex;flex-direction:column;gap:20px">
     <div class="form-group">
-      <label class="form-label">Username</label>
-      <input id="login-username" type="text" placeholder="Username" autocomplete="username"
-        onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()"/>
+      <label class="form-label" for="login-username">Username</label>
+      <input id="login-username" name="username" type="text" placeholder="Username" autocomplete="username"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('login-password').focus();}"/>
     </div>
     <div class="form-group">
-      <label class="form-label">Password</label>
-      <input id="login-password" type="password" placeholder="Password" autocomplete="current-password"
-        onkeydown="if(event.key==='Enter')submitLogin()"/>
+      <label class="form-label" for="login-password">Password</label>
+      <input id="login-password" name="password" type="password" placeholder="Password" autocomplete="current-password"/>
     </div>
     <div class="login-err" id="login-err"></div>
-    <button class="btn btn-primary" id="login-btn" onclick="submitLogin()" style="width:100%;justify-content:center;padding:10px">
+    <button class="btn btn-primary" id="login-btn" type="submit" style="width:100%;justify-content:center;padding:10px">
       Sign In
     </button>
+    </form>
     <div class="login-footer" style="display:flex;align-items:center;justify-content:center;gap:8px">
       ElectoStock — Electronics Inventory <button class="theme-toggle" onclick="toggleTheme()"></button>
     </div>
@@ -593,6 +597,7 @@
       <button class="close-btn" onclick="closeUsersModal()">✕</button>
     </div>
     <div class="modal-body">
+      <div id="user-pw-notice" style="display:none"></div>
       <div class="user-list" id="user-list"></div>
       <div class="role-help">
         <b>Viewer</b>: read only. <b>User</b>: edit items, adjust stock, check out, edit BOMs and categories.
@@ -612,7 +617,7 @@
             <input id="new-user-pw" type="text" autocomplete="off" spellcheck="false" placeholder="At least 10 characters"/>
             <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('new-user-pw').value=generatePassword()">Generate</button>
           </div>
-          <span style="font-size:11px;color:var(--text3)">Shown in plain text so you can pass it on. It can't be viewed again after saving.</span>
+          <span style="font-size:11px;color:var(--text3)">Shown in plain text so you can pass it on. You'll get one more chance to copy it after saving.</span>
         </div>
         <div style="display:flex;justify-content:flex-end">
           <button class="btn btn-primary btn-sm" id="add-user-btn" onclick="addUser()">Add User</button>
@@ -2339,8 +2344,62 @@ function generatePassword() {
 
 function setUsersError(msg) { document.getElementById('users-modal-err').textContent = msg || ''; }
 
+// Ask the browser's password manager to save (or update) a login. Chrome shows
+// its "Save password?" prompt; browsers without the Credential Management API
+// (Firefox, Safari) just skip this.
+async function offerToSavePassword(username, password) {
+  if (!window.PasswordCredential || !navigator.credentials) return false;
+  try {
+    await navigator.credentials.store(new PasswordCredential({ id: username, password, name: username }));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Passwords can't be read back from the server, so show a newly set one once
+function showPasswordNotice(username, password, isSelf) {
+  const box = document.getElementById('user-pw-notice');
+  box.className = 'pw-notice';
+  box.style.display = 'flex';
+  box.innerHTML = `
+    <div>New password for <b>${escapeHtml(username)}</b>. Copy it now: it can't be shown again.
+      ${isSelf ? 'Your browser may also offer to save it.' : ''}</div>
+    <div class="pw-notice-row">
+      <code id="user-pw-notice-value"></code>
+      <button class="btn btn-primary btn-sm" id="user-pw-copy" onclick="copyNoticePassword()">Copy</button>
+      <button class="btn btn-ghost btn-sm" onclick="hidePasswordNotice()">Done</button>
+    </div>`;
+  document.getElementById('user-pw-notice-value').textContent = password;
+}
+
+function hidePasswordNotice() {
+  const box = document.getElementById('user-pw-notice');
+  box.style.display = 'none';
+  box.innerHTML = '';
+}
+
+async function copyNoticePassword() {
+  const value = document.getElementById('user-pw-notice-value').textContent;
+  const btn   = document.getElementById('user-pw-copy');
+  try {
+    await navigator.clipboard.writeText(value);
+    btn.textContent = 'Copied';
+  } catch (e) {
+    // Clipboard API blocked: select the text, try the legacy copy command,
+    // and otherwise leave it selected so it can be copied by hand
+    const range = document.createRange();
+    range.selectNodeContents(document.getElementById('user-pw-notice-value'));
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
+    let copied = false;
+    try { copied = document.execCommand('copy'); } catch (e2) {}
+    btn.textContent = copied ? 'Copied' : 'Press Ctrl+C';
+  }
+}
+
 function openUsersModal() {
   setUsersError('');
+  hidePasswordNotice();
   openPwIdx = null;
   ['new-user-name', 'new-user-pw'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('new-user-role').value = 'user';
@@ -2348,7 +2407,10 @@ function openUsersModal() {
   loadUsers();
 }
 
-function closeUsersModal() { document.getElementById('users-modal').classList.remove('open'); }
+function closeUsersModal() {
+  hidePasswordNotice(); // don't leave a password on screen
+  document.getElementById('users-modal').classList.remove('open');
+}
 
 async function loadUsers() {
   const list = document.getElementById('user-list');
@@ -2423,6 +2485,8 @@ async function saveUserPassword(idx) {
   try {
     await api('saveUser', { username: u.username, role: u.role, password });
     openPwIdx = null;
+    showPasswordNotice(u.username, password, u.is_self);
+    if (u.is_self) offerToSavePassword(u.username, password);
     await loadUsers();
     showToast(u.is_self
       ? 'Password changed. Your other devices have been signed out.'
@@ -2460,6 +2524,7 @@ async function addUser() {
   setUsersError('');
   try {
     await api('saveUser', { username, role, password, create: true });
+    showPasswordNotice(username, password, false);
     document.getElementById('new-user-name').value = '';
     document.getElementById('new-user-pw').value = '';
     await loadUsers();
@@ -2541,6 +2606,7 @@ async function submitLogin() {
     localStorage.setItem('electostock_token',    r.token);
     localStorage.setItem('electostock_username', r.username);
     localStorage.setItem('electostock_role',     sessionRole);
+    offerToSavePassword(r.username, password);
     showApp(r.username);
     syncAll(false).then(startPolling);
   } catch(e) {

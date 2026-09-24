@@ -257,3 +257,12 @@ test('there is always at least one admin', () => {
   assert.match(app.call('saveUser', { token: bea, username: 'bea', role: 'user' }).error, /own role/);
   assert.equal(app.ctx.countAdmins(app.sheets.get('Users').getDataRange().getValues()), 1);
 });
+
+test('own password change keeps this session even if it was cached by older code', () => {
+  const { app, as, tokens } = setup();
+  // Older code cached sessions without tokenHash
+  const key = app.ctx.sessionCacheKey(app.ctx.sha256Hex(tokens.ada));
+  app.cacheStore.set(key, JSON.stringify({ username: 'ada', role: 'admin', expires: new Date(Date.now() + 3600e3).toISOString() }));
+  assert.ok(as('ada', 'saveUser', { username: 'ada', role: 'admin', password: 'new-admin-password' }).success);
+  assert.ok(as('ada', 'getAll').items);
+});

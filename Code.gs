@@ -887,8 +887,10 @@ function validateToken(token) {
     const rows = getSessionsSheet().getDataRange().getValues();
     const row  = rows.slice(1).find(r => String(r[0]) === tokenHash);
     if (!row) return { error: 'Not authenticated', auth: false };
-    session = { username: String(row[1]), role: String(row[2]), expires: String(row[3]), tokenHash };
+    session = { username: String(row[1]), role: String(row[2]), expires: String(row[3]) };
   }
+  // Set on every call, never taken from the cache: entries cached by older code lack it
+  session.tokenHash = tokenHash;
 
   const remainingMs = new Date(session.expires).getTime() - Date.now();
   if (!(remainingMs > 0)) return { error: 'Session expired, please log in again', auth: false };
