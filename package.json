@@ -5,5 +5,8 @@
     "test": "node --test",
     "push": "clasp push -f",
     "deploy": "node --test && clasp push -f && clasp update-deployment AKfycbzbSuWw-DXNsrO0WFPz9mFENL_75r-g1Kt8IzYSucpEGmYndtQhY1K4-ntYtxqshUc-"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8"
   }
 }
