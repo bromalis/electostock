@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log.
 
 - `index.html`: a standalone single-page frontend (inline CSS and JS, no framework, no build step). It is served by GitHub Pages and talks to Supabase through `supabase-js`, loaded from jsDelivr and pinned with an SRI hash.
-- `assets/`: the Aerolab logo shown in the sidebar and on the login screen (`aerolab-logo.png`, trimmed and scaled to 480 px wide), the browser-tab icon (`favicon-32.png`, the logo's "A" on a transparent square) and the phone home-screen icon (`apple-touch-icon.png`, the same "A" on white).
+- `assets/`: the Aerolab logo shown in the sidebar, on the login screen and on the printed pick list (`aerolab-logo.png`, trimmed and scaled to 480 px wide), the browser-tab icon (`favicon-32.png`, the logo's "A" on a transparent square) and the phone home-screen icon (`apple-touch-icon.png`, the same "A" on white).
 - `supabase/migrations/*.sql`: the whole backend. It contains the Postgres schema, the row-level security (RLS) policies, the triggers and the database functions.
 - `scripts/import-sheet.mjs`: a one-off import from CSV exports of the old Google Sheet.
 - `Code.gs`: Apps Script bound to the old Google Sheet. It keeps a read-only copy of the data there, refreshed hourly, and answers any old copy of the app with "moved". It is deployed with clasp; `.clasp.json`, `.claspignore` and `appsscript.json` belong to it. See "Google Sheet copy" below.
@@ -84,6 +84,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 
 ### Theme
 - Colours are CSS custom properties on `:root` (dark), overridden by `:root[data-theme="light"]`. Use the tokens rather than hard-coded colours; the printed pick list is the exception and stays black on white.
+- The pick list is written into a new `about:blank` window (`writePickListToWindow`), so anything it loads, like the logo, needs an absolute URL built with `new URL(path, location.href)`. It calls `print()` on `window.onload`, which waits for images, so the logo is on the page before the print dialog opens.
 - A script in `<head>` sets `data-theme` before first paint, from the saved `electostock_theme` value or the device setting.
 - Format money with `fmtMoney` so negative values read `−$0.50`.
 
