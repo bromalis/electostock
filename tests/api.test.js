@@ -181,3 +181,79 @@ test('saveBOM drops zero-quantity lines', () => {
   as('uma', 'saveBOM', { parent_id: ids.Sub, lines: [{ child_id: ids.R1, quantity: 0 }, { child_id: ids.C1, quantity: -1 }] });
   assert.deepEqual(as('uma', 'getBOMs').boms.filter(b => b.parent_id === ids.Sub).map(b => b.quantity), [-1]);
 });
+
+// ── User management ─────────────────────────────────────────────────────────
+
+test('only admins can manage users', () => {
+  const { as } = setup();
+  assert.match(as('uma', 'listUsers').error, /not allowed/);
+  assert.match(as('uma', 'saveUser', { username: 'x', role: 'admin', password: 'long-enough-pw', create: true }).error, /not allowed/);
+  assert.match(as('vic', 'deleteUser', { username: 'uma' }).error, /not allowed/);
+  const users = as('ada', 'listUsers').users;
+  assert.deepEqual(users.map(u => [u.username, u.role, u.is_self]), [
+    ['ada', 'admin', true], ['uma', 'user', false], ['vic', 'viewer', false],
+  ]);
+  assert.equal(users[0].active_sessions, 1);
+});
+
+test('an admin can create a user who can then log in', () => {
+  const { app, as } = setup();
+  assert.ok(as('ada', 'saveUser', { username: 'newbie', role: 'viewer', password: 'first-password-1', create: true }).created);
+  const login = app.call('login', { username: 'newbie', password: 'first-password-1' });
+  assert.equal(login.role, 'viewer');
+  assert.match(as('ada', 'saveUser', { username: 'NEWBIE', role: 'user', password: 'another-password', create: true }).error, /already exists/);
+  assert.match(as('ada', 'saveUser', { username: 'bad name', role: 'user', password: 'another-password', create: true }).error, /Usernames/);
+  assert.match(as('ada', 'saveUser', { username: 'shorty', role: 'user', password: 'short', create: true }).error, /at least/);
+  assert.match(as('ada', 'saveUser', { username: 'nopw', role: 'user', create: true }).error, /Set a password/);
+  assert.match(as('ada', 'saveUser', { username: 'boss', role: 'root', password: 'long-enough-pw', create: true }).error, /Role must be/);
+});
+
+test('changing a role signs the user out, and the new role applies at next login', () => {
+  const { app, as } = setup();
+  assert.ok(as('ada', 'saveUser', { username: 'vic', role: 'user' }).success);
+  assert.equal(as('vic', 'getAll').auth, false);
+  const again = app.call('login', { username: 'vic', password: 'viewer-password-1' });
+  assert.equal(again.role, 'user');
+  assert.ok(app.call('adjustQty', { token: again.token, id: 1, action: 'add', qty: 1 }).success);
+});
+
+test('resetting a password replaces the old one', () => {
+  const { app, as } = setup();
+  assert.ok(as('ada', 'saveUser', { username: 'uma', role: 'user', password: 'reset-password-99' }).success);
+  assert.match(app.call('login', { username: 'uma', password: 'user-password-12' }).error, /Invalid/);
+  assert.ok(app.call('login', { username: 'uma', password: 'reset-password-99' }).token);
+});
+
+test('an admin changing their own password stays signed in on this device only', () => {
+  const { app, as } = setup();
+  const otherDevice = app.call('login', { username: 'ada', password: 'admin-password-1' }).token;
+  assert.ok(as('ada', 'saveUser', { username: 'ada', role: 'admin', password: 'new-admin-password' }).success);
+  assert.ok(as('ada', 'getAll').items);
+  assert.equal(app.call('getAll', { token: otherDevice }).auth, false);
+});
+
+test('admins cannot lock themselves out', () => {
+  const { as } = setup();
+  assert.match(as('ada', 'saveUser', { username: 'ada', role: 'user' }).error, /own role/);
+  assert.match(as('ada', 'deleteUser', { username: 'ada' }).error, /own account/);
+});
+
+test('deleting a user removes their login and sessions', () => {
+  const { app, as } = setup();
+  assert.ok(as('ada', 'deleteUser', { username: 'uma' }).success);
+  assert.equal(as('uma', 'getAll').auth, false);
+  assert.match(app.call('login', { username: 'uma', password: 'user-password-12' }).error, /Invalid/);
+  assert.deepEqual(as('ada', 'listUsers').users.map(u => u.username), ['ada', 'vic']);
+  assert.match(as('ada', 'deleteUser', { username: 'ghost' }).error, /not found/);
+});
+
+test('there is always at least one admin', () => {
+  const { app, as } = setup();
+  // A second admin exists, so demoting and deleting admins works until one is left
+  as('ada', 'saveUser', { username: 'bea', role: 'admin', password: 'second-admin-pw', create: true });
+  const bea = app.call('login', { username: 'bea', password: 'second-admin-pw' }).token;
+  assert.ok(app.call('saveUser', { token: bea, username: 'ada', role: 'user' }).success);
+  // ada has been signed out and bea is now the only admin
+  assert.match(app.call('saveUser', { token: bea, username: 'bea', role: 'user' }).error, /own role/);
+  assert.equal(app.ctx.countAdmins(app.sheets.get('Users').getDataRange().getValues()), 1);
+});

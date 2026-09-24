@@ -50,6 +50,9 @@ const ACTION_ROLES = {
   'updateCat':       'user',
   'delete':          'admin',
   'deleteCat':       'admin',
+  'listUsers':       'admin',
+  'saveUser':        'admin',
+  'deleteUser':      'admin',
 };
 
 const LOCK_TIMEOUT_MS       = 20 * 1000;
@@ -246,14 +249,14 @@ function handleRequest(e) {
       return { error: 'Your role (' + auth.session.role + ') is not allowed to do that' };
     }
 
-    const run = () => dispatch(action, data);
+    const run = () => dispatch(action, data, auth.session);
     return ROLE_RANK[minRole] > ROLE_RANK.viewer ? withLock(run) : run();
   } catch(err) {
     return { error: err.message };
   }
 }
 
-function dispatch(action, data) {
+function dispatch(action, data, session) {
   switch (action) {
     // Inventory
     case 'getAll':          return actionGetAll();
@@ -275,6 +278,10 @@ function dispatch(action, data) {
     // Polling / bulk load
     case 'getLastModified': return actionGetLastModified();
     case 'getAll+getCats':  return actionGetAllAndCats();
+    // Users (admin)
+    case 'listUsers':       return actionListUsers(session);
+    case 'saveUser':        return actionSaveUser(data, session);
+    case 'deleteUser':      return actionDeleteUser(data.username, session);
   }
   return { error: 'Unknown action: ' + action };
 }
@@ -868,7 +875,7 @@ function pruneSessions(keep) {
   rewriteDataRows(sheet, SESSION_HEADERS.length, kept);
 }
 
-// Returns { session: { username, role, expires } } or { error, auth: false }.
+// Returns { session: { username, role, expires, tokenHash } } or { error, auth: false }.
 function validateToken(token) {
   if (!token) return { error: 'Not authenticated', auth: false };
   const tokenHash = sha256Hex(String(token));
@@ -880,7 +887,7 @@ function validateToken(token) {
     const rows = getSessionsSheet().getDataRange().getValues();
     const row  = rows.slice(1).find(r => String(r[0]) === tokenHash);
     if (!row) return { error: 'Not authenticated', auth: false };
-    session = { username: String(row[1]), role: String(row[2]), expires: String(row[3]) };
+    session = { username: String(row[1]), role: String(row[2]), expires: String(row[3]), tokenHash };
   }
 
   const remainingMs = new Date(session.expires).getTime() - Date.now();
@@ -892,19 +899,123 @@ function validateToken(token) {
   return { session };
 }
 
-// ─── User management (run from the Apps Script editor) ───────────────────────
-// Creates the user, or updates the password/role of an existing one. Changing a
-// user signs them out everywhere.
+// ─── User management ──────────────────────────────────────────────────────────
+// Admins manage users in the app (listUsers / saveUser / deleteUser). createUser
+// does the same from the Apps Script editor, e.g. to create the first admin.
+// A change to someone's password or role signs them out everywhere, so the new
+// role applies at their next login.
+
+const USERNAME_PATTERN = /^[A-Za-z0-9._@-]{1,40}$/;
+
+function normUser(u) { return String(u || '').trim().toLowerCase(); }
+
+// Each returns an error string or null.
+function checkUsername(username) {
+  return USERNAME_PATTERN.test(username) ? null : 'Usernames are 1-40 letters, numbers or . _ @ -';
+}
+function checkPassword(password) {
+  return String(password).length >= MIN_PASSWORD_LENGTH ? null : 'Password must be at least ' + MIN_PASSWORD_LENGTH + ' characters';
+}
+function checkRole(role) {
+  return role in ROLE_RANK ? null : 'Role must be one of: ' + Object.keys(ROLE_RANK).join(', ');
+}
+
+// The role a stored value grants: unknown values count as viewer, as in roleRank().
+function effectiveRole(stored) {
+  const r = String(stored || '').trim().toLowerCase();
+  return r in ROLE_RANK ? r : 'viewer';
+}
+
+function countAdmins(rows) {
+  return rows.slice(1).filter(r => String(r[0]).trim() && effectiveRole(r[2]) === 'admin').length;
+}
+
+// Sign a user out of every session, optionally keeping one (by token hash).
+function revokeSessionsFor(username, keepTokenHash) {
+  const u = normUser(username);
+  pruneSessions(row => normUser(row[1]) !== u || (keepTokenHash && String(row[0]) === keepTokenHash));
+}
+
+function actionListUsers(session) {
+  const sheet = getUsersSheet();
+  ensureHeaders(sheet, USER_HEADERS);
+  const sessions = getSessionsSheet().getDataRange().getValues().slice(1);
+  const now = Date.now();
+  const users = sheet.getDataRange().getValues().slice(1)
+    .filter(r => String(r[0]).trim())
+    .map(r => {
+      const u = normUser(r[0]);
+      return {
+        username:        String(r[0]).trim(),
+        role:            effectiveRole(r[2]),
+        active_sessions: sessions.filter(s => normUser(s[1]) === u && new Date(String(s[3])).getTime() > now).length,
+        is_self:         u === normUser(session.username),
+      };
+    })
+    .sort((a, b) => a.username.localeCompare(b.username));
+  return { users };
+}
+
+// data = { username, role, password?, create? }
+// create: add a new user (password required). Otherwise change the role and/or,
+// if a password is given, reset it.
+function actionSaveUser(data, session) {
+  const username = String(data.username || '').trim();
+  const role     = String(data.role || '').trim().toLowerCase();
+  const password = data.password ? String(data.password) : '';
+  const err = checkUsername(username) || checkRole(role) || (password ? checkPassword(password) : null);
+  if (err) return { error: err };
+
+  const sheet = getUsersSheet();
+  ensureHeaders(sheet, USER_HEADERS);
+  const rows = sheet.getDataRange().getValues();
+  const i    = findUserRow(rows, username);
+
+  if (data.create) {
+    if (i > 0)     return { error: 'A user named "' + username + '" already exists' };
+    if (!password) return { error: 'Set a password for the new user' };
+    sheet.appendRow([username, hashPassword(password), role]);
+    return { success: true, created: true };
+  }
+
+  if (i < 0) return { error: 'User not found: ' + username };
+  const isSelf      = normUser(username) === normUser(session.username);
+  const currentRole = effectiveRole(rows[i][2]);
+  const roleChanged = role !== currentRole;
+  if (roleChanged && isSelf) return { error: "You can't change your own role. Ask another admin to do it." };
+  if (roleChanged && currentRole === 'admin' && countAdmins(rows) <= 1) return { error: 'There must be at least one admin.' };
+  if (!roleChanged && !password) return { success: true };
+
+  sheet.getRange(i+1, 2, 1, 2).setValues([[password ? hashPassword(password) : rows[i][1], role]]);
+  // An admin changing their own password stays signed in on this device
+  revokeSessionsFor(username, isSelf ? session.tokenHash : null);
+  return { success: true };
+}
+
+function actionDeleteUser(username, session) {
+  username = String(username || '').trim();
+  if (normUser(username) === normUser(session.username)) return { error: "You can't delete your own account." };
+  const sheet = getUsersSheet();
+  const rows  = sheet.getDataRange().getValues();
+  const i     = findUserRow(rows, username);
+  if (i < 0) return { error: 'User not found: ' + username };
+  if (effectiveRole(rows[i][2]) === 'admin' && countAdmins(rows) <= 1) return { error: 'There must be at least one admin.' };
+  sheet.deleteRow(i+1);
+  revokeSessionsFor(username);
+  return { success: true };
+}
+
+// Run from the Apps Script editor. Creates the user, or updates the password and
+// role of an existing one and signs them out everywhere.
 function createUser(username, password, role) {
   if (!username || !password) {
     Logger.log('Usage: createUser("username", "password", "role")');
     return;
   }
-  if (String(password).length < MIN_PASSWORD_LENGTH) {
-    throw new Error('Password must be at least ' + MIN_PASSWORD_LENGTH + ' characters');
-  }
-  role = String(role || 'user').trim().toLowerCase();
-  if (!(role in ROLE_RANK)) throw new Error('Role must be one of: ' + Object.keys(ROLE_RANK).join(', '));
+  username = String(username).trim();
+  role     = String(role || 'user').trim().toLowerCase();
+  const err = checkUsername(username) || checkPassword(password) || checkRole(role);
+  if (err) throw new Error(err);
 
   const lock = LockService.getScriptLock();
   lock.waitLock(LOCK_TIMEOUT_MS);
@@ -915,11 +1026,10 @@ function createUser(username, password, role) {
     const i    = findUserRow(data, username);
     if (i > 0) {
       sheet.getRange(i+1, 2, 1, 2).setValues([[hashPassword(password), role]]);
-      const u = String(username).trim().toLowerCase();
-      pruneSessions(row => String(row[1]).trim().toLowerCase() !== u);
+      revokeSessionsFor(username);
       Logger.log('Updated user: ' + username + ' (signed out of all sessions)');
     } else {
-      sheet.appendRow([String(username).trim(), hashPassword(password), role]);
+      sheet.appendRow([username, hashPassword(password), role]);
       Logger.log('Created user: ' + username);
     }
     SpreadsheetApp.flush();

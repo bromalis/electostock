@@ -271,6 +271,16 @@
   .login-user-badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);font-family:var(--mono);}
   .login-user-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
   .bom-qty-neg{color:var(--warn) !important;}
+  .user-list{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;padding-right:2px;}
+  .user-item{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;display:flex;flex-direction:column;gap:8px;}
+  .user-row{display:flex;align-items:center;gap:10px;}
+  .user-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .user-meta{font-size:11px;font-family:var(--mono);color:var(--text3);white-space:nowrap;}
+  .user-row select{width:auto;padding:4px 8px;font-size:12px;}
+  .user-pw-row{display:flex;gap:6px;align-items:center;}
+  .user-pw-row input{font-family:var(--mono);font-size:12px;padding:5px 8px;}
+  .role-help{font-size:11px;color:var(--text3);line-height:1.6;}
+  .role-help b{color:var(--text2);font-weight:500;}
   .theme-toggle{font-size:13px;line-height:1;color:var(--text3);background:none;border:1px solid var(--border2);border-radius:var(--radius);cursor:pointer;padding:3px 6px;transition:color .15s,border-color .15s;}
   .theme-toggle:hover{color:var(--accent);border-color:var(--accent2);}
   /* Role gating (the server enforces the same rules) */
@@ -336,6 +346,7 @@
       <button class="nav-item" onclick="setView('history',this)"><span class="nav-icon">⏱</span> Checkout History</button>
       <button class="nav-item" onclick="exportCSV()"><span class="nav-icon">⤓</span> Export Inventory</button>
       <button class="nav-item" onclick="exportBOMs()"><span class="nav-icon">⤓</span> Export BOMs</button>
+      <button class="nav-item needs-admin" onclick="openUsersModal()"><span class="nav-icon">⚇</span> Users</button>
     </nav>
     <div class="cat-filter">
       <div class="cat-filter-header">
@@ -575,6 +586,46 @@
 </div>
 
 <!-- ══ Category Manager Modal ══ -->
+<div class="modal-overlay" id="users-modal" onclick="if(event.target.id==='users-modal')closeUsersModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Users</div>
+      <button class="close-btn" onclick="closeUsersModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="user-list" id="user-list"></div>
+      <div class="role-help">
+        <b>Viewer</b>: read only. <b>User</b>: edit items, adjust stock, check out, edit BOMs and categories.
+        <b>Admin</b>: everything, including deleting items and categories and managing users.
+        Changing someone's role or password signs them out, and the change applies when they sign in again.
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;flex-direction:column;gap:10px;">
+        <div class="cat-section-label">Add User</div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label" for="new-user-name">Username</label>
+            <input id="new-user-name" placeholder="e.g. alice" autocomplete="off" spellcheck="false"/></div>
+          <div class="form-group"><label class="form-label" for="new-user-role">Role</label>
+            <select id="new-user-role"><option value="viewer">Viewer</option><option value="user" selected>User</option><option value="admin">Admin</option></select></div>
+        </div>
+        <div class="form-group"><label class="form-label" for="new-user-pw">Password</label>
+          <div class="user-pw-row">
+            <input id="new-user-pw" type="text" autocomplete="off" spellcheck="false" placeholder="At least 10 characters"/>
+            <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('new-user-pw').value=generatePassword()">Generate</button>
+          </div>
+          <span style="font-size:11px;color:var(--text3)">Shown in plain text so you can pass it on. It can't be viewed again after saving.</span>
+        </div>
+        <div style="display:flex;justify-content:flex-end">
+          <button class="btn btn-primary btn-sm" id="add-user-btn" onclick="addUser()">Add User</button>
+        </div>
+      </div>
+      <span id="users-modal-err" style="font-size:12px;color:var(--danger);min-height:16px;display:block"></span>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeUsersModal()">Done</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="cat-modal" onclick="if(event.target.id==='cat-modal')closeCatModal()">
   <div class="modal modal-sm">
     <div class="modal-header">
@@ -660,6 +711,7 @@ let historyEntries = [];
 // refresh the data and tell the user to check before trying again.
 const RETRYABLE_ACTIONS = new Set([
   'login', 'logout', 'getAll', 'getAll+getCats', 'getCats', 'getBOMs', 'getCheckoutLog', 'getLastModified',
+  'listUsers',
 ]);
 const RETRY_DELAYS_MS    = [1000, 3000];
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -2265,6 +2317,158 @@ function exportBOMs() {
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'electronics_boms.csv';
   a.click();
+}
+
+// ══════════════════════════════════════════════════════════
+//  Users (admin only; the server enforces it too)
+// ══════════════════════════════════════════════════════════
+const ROLE_LABELS = { viewer: 'Viewer', user: 'User', admin: 'Admin' };
+let usersList = [];      // [{ username, role, active_sessions, is_self }]
+let openPwIdx = null;    // row whose "set password" field is open
+
+function escapeHtml(v) {
+  return String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// 16 characters from an alphabet without look-alikes (0/O, 1/l/I)
+function generatePassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  const bytes = crypto.getRandomValues(new Uint32Array(16));
+  return [...bytes].map(b => chars[b % chars.length]).join('');
+}
+
+function setUsersError(msg) { document.getElementById('users-modal-err').textContent = msg || ''; }
+
+function openUsersModal() {
+  setUsersError('');
+  openPwIdx = null;
+  ['new-user-name', 'new-user-pw'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('new-user-role').value = 'user';
+  document.getElementById('users-modal').classList.add('open');
+  loadUsers();
+}
+
+function closeUsersModal() { document.getElementById('users-modal').classList.remove('open'); }
+
+async function loadUsers() {
+  const list = document.getElementById('user-list');
+  if (!usersList.length) list.innerHTML = '<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px 0"><div class="spinner"></div></div>';
+  try {
+    usersList = (await api('listUsers')).users || [];
+    renderUserList();
+  } catch (err) {
+    setUsersError('Error: ' + err.message);
+  }
+}
+
+function renderUserList() {
+  const list = document.getElementById('user-list');
+  if (!usersList.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px 0">No users</div>'; return; }
+  list.innerHTML = usersList.map((u, idx) => {
+    const sessions = u.active_sessions
+      ? `signed in · ${u.active_sessions} device${u.active_sessions !== 1 ? 's' : ''}` : 'signed out';
+    const roleOptions = Object.keys(ROLE_LABELS)
+      .map(r => `<option value="${r}"${r === u.role ? ' selected' : ''}>${ROLE_LABELS[r]}</option>`).join('');
+    const pwRow = openPwIdx === idx ? `
+      <div class="user-pw-row">
+        <input id="user-pw-${idx}" type="text" autocomplete="off" spellcheck="false" placeholder="New password (10+ characters)"/>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('user-pw-${idx}').value=generatePassword()">Generate</button>
+        <button class="btn btn-primary btn-sm" id="user-pw-save-${idx}" onclick="saveUserPassword(${idx})">Save</button>
+      </div>` : '';
+    return `<div class="user-item">
+      <div class="user-row">
+        <span class="user-name">${escapeHtml(u.username)}${u.is_self ? ' <span class="user-meta">(you)</span>' : ''}</span>
+        <span class="user-meta">${sessions}</span>
+        <select id="user-role-${idx}" onchange="changeUserRole(${idx}, this)"${u.is_self ? ' disabled title="Another admin has to change your role"' : ''}>${roleOptions}</select>
+        <button class="btn btn-ghost btn-xs" onclick="togglePwRow(${idx})">${openPwIdx === idx ? 'Cancel' : 'Password'}</button>
+        ${u.is_self ? '' : `<button class="btn btn-danger btn-xs" id="user-del-${idx}" onclick="deleteUser(${idx})">Delete</button>`}
+      </div>${pwRow}
+    </div>`;
+  }).join('');
+  if (openPwIdx !== null) document.getElementById('user-pw-' + openPwIdx)?.focus();
+}
+
+function togglePwRow(idx) {
+  openPwIdx = openPwIdx === idx ? null : idx;
+  setUsersError('');
+  renderUserList();
+}
+
+async function changeUserRole(idx, select) {
+  const u = usersList[idx];
+  const role = select.value;
+  setUsersError('');
+  if (!confirm(`Change ${u.username} to ${ROLE_LABELS[role]}? They'll be signed out and get the new role when they sign in again.`)) {
+    select.value = u.role;
+    return;
+  }
+  select.disabled = true;
+  try {
+    await api('saveUser', { username: u.username, role });
+    await loadUsers();
+  } catch (err) {
+    select.value = u.role;
+    select.disabled = false;
+    setUsersError('Error: ' + err.message);
+  }
+}
+
+async function saveUserPassword(idx) {
+  const u = usersList[idx];
+  const password = document.getElementById('user-pw-' + idx).value;
+  if (password.length < 10) { setUsersError('Passwords need at least 10 characters.'); return; }
+  const btn = document.getElementById('user-pw-save-' + idx);
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
+  setUsersError('');
+  try {
+    await api('saveUser', { username: u.username, role: u.role, password });
+    openPwIdx = null;
+    await loadUsers();
+    showToast(u.is_self
+      ? 'Password changed. Your other devices have been signed out.'
+      : `Password changed for ${u.username}. They've been signed out.`);
+  } catch (err) {
+    btn.disabled = false; btn.textContent = 'Save';
+    setUsersError('Error: ' + err.message);
+  }
+}
+
+async function deleteUser(idx) {
+  const u = usersList[idx];
+  if (!confirm(`Delete ${u.username}? They'll be signed out and won't be able to sign in again.`)) return;
+  const btn = document.getElementById('user-del-' + idx);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
+  setUsersError('');
+  try {
+    await api('deleteUser', { username: u.username });
+    openPwIdx = null;
+    await loadUsers();
+  } catch (err) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
+    setUsersError('Error: ' + err.message);
+  }
+}
+
+async function addUser() {
+  const username = document.getElementById('new-user-name').value.trim();
+  const role     = document.getElementById('new-user-role').value;
+  const password = document.getElementById('new-user-pw').value;
+  if (!/^[A-Za-z0-9._@-]{1,40}$/.test(username)) { setUsersError('Usernames are 1-40 letters, numbers or . _ @ -'); return; }
+  if (password.length < 10) { setUsersError('Passwords need at least 10 characters.'); return; }
+  const btn = document.getElementById('add-user-btn');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
+  setUsersError('');
+  try {
+    await api('saveUser', { username, role, password, create: true });
+    document.getElementById('new-user-name').value = '';
+    document.getElementById('new-user-pw').value = '';
+    await loadUsers();
+    showToast(`Added ${username} (${ROLE_LABELS[role]})`);
+  } catch (err) {
+    setUsersError('Error: ' + err.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Add User';
+  }
 }
 
 // ══════════════════════════════════════════════════════════

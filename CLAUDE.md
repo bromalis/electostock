@@ -29,7 +29,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - The frontend and backend share one request format. Run `npm run deploy` and push to `main` back to back.
 - **One-time setup (run from the Apps Script editor's function dropdown):**
   - `installOnEditTrigger()` installs the onEdit trigger so that manual edits in the sheet bump the `last_modified` value.
-  - `setupUsers()` (edit it first) or `createUser(username, password, role)` creates or updates users. Users can only be created this way; the UI has no sign-up.
+  - Admins manage users in the app (sidebar > Users). `createUser(username, password, role)` in the editor does the same job and is only needed to create the first admin. There's no self sign-up.
 
 ## Architecture
 
@@ -50,7 +50,8 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - The client hides buttons with the `needs-user` / `needs-admin` classes according to `body[data-role]`, but the server is what enforces the rules.
 - Password hashes are stored as `pbkdf2$<iterations>$<salt>$<hash>`. Old unsalted SHA-256 hashes still verify and are upgraded on the next login.
 - Sessions live in the hidden `Sessions` sheet, one row per login, storing a SHA-256 of the token. Validated sessions are cached in `CacheService` for 10 minutes.
-- A session's role is fixed at login. After editing a role in the sheet, run `createUser` for that user to force a re-login.
+- A session's role is fixed at login. Changing a user's role or password through `saveUser` (or `createUser`) signs them out everywhere, so the new role applies at their next login. An admin changing their own password keeps only the current session. If you edit a role directly in the sheet, nothing is signed out.
+- User management actions (`listUsers`, `saveUser`, `deleteUser`) are admin-only. Admins can't change their own role or delete themselves, and there is always at least one admin. `dispatch` receives the caller's `session`, including its `tokenHash`, for these checks.
 
 ### Data storage: sheets as tables
 Each sheet is created on first access by its `get*Sheet()` helper. Column order is defined by the `*_HEADERS` constants, and the code reads and writes cells **by column position**. So reordering or inserting a column means updating those constants and `rowToInvObj`.
