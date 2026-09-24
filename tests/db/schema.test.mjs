@@ -251,3 +251,9 @@ test('users can read their own profile only', async () => {
   const { db, uma } = await setup();
   assert.deepEqual((await rows(db, uma, 'select email, role from profiles')).map(p => [p.email, p.role]), [['uma@example.com', 'user']]);
 });
+
+test('category names are unique regardless of letter case', async () => {
+  const { db, uma } = await setup();
+  await q(db, uma, "insert into categories (name) values ('Resistor')");
+  await rejects(q(db, uma, "insert into categories (name) values ('resistor')"), /duplicate key/);
+});
