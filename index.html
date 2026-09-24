@@ -2280,6 +2280,8 @@ function writePickListToWindow(w, parentId, qty, merged) {
   });
 
   const now  = new Date().toLocaleString();
+  // The print window starts as about:blank, so give it an absolute image URL
+  const logoUrl = new URL('assets/aerolab-logo.png', location.href).href;
   const rows = sorted.map(({ item, qty: q }) => `
     <tr>
       <td>${item.supplier_part || '—'}</td>
@@ -2297,6 +2299,8 @@ function writePickListToWindow(w, parentId, qty, merged) {
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #111; padding: 32px; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
+  .header img { width: 140px; height: auto; flex-shrink: 0; }
   h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
   .meta { font-size: 12px; color: #666; margin-bottom: 24px; display: flex; gap: 24px; flex-wrap: wrap; }
   table { width: 100%; border-collapse: collapse; }
@@ -2318,7 +2322,10 @@ function writePickListToWindow(w, parentId, qty, merged) {
 </style>
 </head>
 <body>
-  <h1>Pick List — ${parent.name}</h1>
+  <div class="header">
+    <h1>Pick List — ${parent.name}</h1>
+    <img src="${logoUrl}" alt="Aerolab">
+  </div>
   <div class="meta">
     <span><b>Qty building:</b> ${qty}</span>
     <span><b>Components:</b> ${sorted.length}</span>
