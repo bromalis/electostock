@@ -39,7 +39,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   - Email goes out over custom SMTP. For now that is Gmail (`smtp.gmail.com:465`, sending as ben@aerolab.com with an app password), a stopgap until Resend on `mail.aerolab.com` is set up. Supabase's built-in sender only delivers to members of the Supabase organisation.
   - The wording of the invite, sign-in-link and reset emails lives in Authentication > Emails > Templates. First-time invites use the "Confirm signup" template, because `signInWithOtp` creates the user; existing users get "Magic Link"; resets use "Reset Password".
 - **Local testing:** from the repo root, run `python -m http.server 8765` and open http://localhost:8765/. That origin is in the project's Redirect URLs, so emailed links work. The page talks to the **real** project, so use obviously named test data and remove it afterwards.
-- **If the site suddenly can't load data:** the Supabase free plan pauses a project after about a week without activity. Restore it from the Supabase dashboard; no data is lost.
+- **Keep-alive** (`.github/workflows/keepalive.yml`): the Supabase free plan pauses a project after about a week without activity. To prevent that, a daily scheduled job calls `public.ping()`, a function the anonymous role can call that only returns `'ok'`. The hourly Sheet refresh counts as activity too. A failed ping fails the job, so GitHub's failure email doubles as a daily reachability check. GitHub turns off scheduled workflows in public repos after 60 days without a push; any push re-enables it. If the project does pause, restore it from the Supabase dashboard; no data is lost.
 
 ## Architecture
 

@@ -37,3 +37,9 @@ test('only a hash of the token is stored, and the API cannot reach tokens', asyn
   await assert.rejects(rows(db, ada, 'select public.create_export_token()'), /permission denied/);
   await assert.rejects(rows(db, null, 'select public.create_export_token()'), /permission denied/);
 });
+
+test('ping() answers the anonymous API role and nobody else needs it', async () => {
+  const { db, ada } = await setup();
+  assert.equal((await q(db, null, 'select public.ping() as r')).rows[0].r, 'ok');
+  await assert.rejects(rows(db, ada, 'select public.ping()'), /permission denied/);
+});
