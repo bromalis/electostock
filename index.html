@@ -696,6 +696,15 @@ async function api(action, data = {}) {
       json = await postToBackend(action, data);
       break;
     } catch (err) {
+      // A timed-out request is often still running on Google's side; retrying
+      // would only add load. Retry fast failures (the flaky redirect's 404) only.
+      if (err.name === 'AbortError') {
+        if (!RETRYABLE_ACTIONS.has(action)) syncAll(true);
+        throw new Error(RETRYABLE_ACTIONS.has(action)
+          ? 'Google Sheets took too long to respond. Try again in a moment.'
+          : 'Google Sheets took too long to respond, so this may or may not have been saved. '
+            + 'The data has been refreshed: check it before trying again.');
+      }
       if (!RETRYABLE_ACTIONS.has(action)) {
         syncAll(true);
         throw new Error('No reply from Google Sheets, so this may or may not have been saved. '
@@ -879,8 +888,14 @@ async function syncAll(silent = false) {
   } finally { isSyncing = false; }
 }
 
+// Each request is an Apps Script execution. Overlapping ones make Google start
+// extra script instances, which is slow, so never stack polls and don't poll
+// from tabs nobody is looking at.
+let pollInFlight = false;
+
 async function poll() {
-  if (isSyncing) return;
+  if (isSyncing || pollInFlight || document.hidden || !sessionToken) return;
+  pollInFlight = true;
   try {
     const r = await api('getLastModified');
     if (r.last_modified && r.last_modified !== lastKnownTimestamp) {
@@ -890,7 +905,13 @@ async function poll() {
       setSyncStatus('ok', 'Updated ' + new Date().toLocaleTimeString());
     }
   } catch(err) { /* silent */ }
+  finally { pollInFlight = false; }
 }
+
+// Catch up as soon as a hidden tab is shown again
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && pollTimer) poll();
+});
 
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);

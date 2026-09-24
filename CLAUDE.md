@@ -62,6 +62,9 @@ Each sheet is created on first access by its `get*Sheet()` helper. Column order 
 ### Sync model
 - On load, the client calls `getAll+getCats`, which returns items, categories, BOMs, and the timestamp in one call. It keeps everything in global arrays (`inventory`, `categories`, `boms`).
 - Every `POLL_INTERVAL_MS` (30s) the client polls `getLastModified` and runs a full silent re-sync when the timestamp has changed.
+- Every request is a separate Apps Script execution. When executions overlap, Google starts extra script instances, which adds 10–30 s of latency even though the script itself runs in under 2 s. So:
+  - `poll()` never overlaps another poll or a sync, and it skips hidden tabs. A tab polls straight away when it becomes visible again.
+  - `api()` retries only fast failures. A timed-out request (`REQUEST_TIMEOUT_MS`) may still be running on Google's side, so it isn't retried.
 
 ### BOM logic
 - The server is authoritative. The pure functions in `Code.gs` (`resolveBomLeaves`, `mergeBomLines`, `buildLogComponents`, `calcBomCost`, `findAncestors`, `validateBomLines`) are unit-tested in `tests/code.test.js`.
