@@ -90,3 +90,24 @@ test('roleRank treats unknown roles as viewer', () => {
   assert.equal(ctx.roleRank('superuser'), 0);
   assert.equal(ctx.roleRank(''), 0);
 });
+
+test('negative lines cancel positives across sub-assemblies', () => {
+  // 40 Variant = 1×Sub (3×R1 + 1×C1) + 1×NoR1, where 50 NoR1 = −3×R1
+  const vItems = new Map([...byId, [40, { id: 40, name: 'Variant' }], [50, { id: 50, name: 'NoR1' }]]);
+  const vLines = ctx.groupBomLines([
+    ...boms,
+    { parent_id: 40, child_id: 20, quantity: 1 },
+    { parent_id: 40, child_id: 50, quantity: 1 },
+    { parent_id: 50, child_id: 1,  quantity: -3 },
+  ]);
+  const merged = plain(ctx.mergeBomLines(ctx.resolveBomLeaves(40, 2, vLines, vItems)));
+  assert.deepEqual(Object.fromEntries(merged.map(m => [m.item.id, m.qty])), { 1: 0, 2: 2 });
+  assert.equal(ctx.calcBomCost(40, vLines, vItems).toFixed(4), '0.5000'); // 0.8 − 3×0.10
+});
+
+test('a net-negative component resolves to a negative quantity', () => {
+  const kit = ctx.groupBomLines([{ parent_id: 30, child_id: 1, quantity: -2 }]);
+  const merged = plain(ctx.mergeBomLines(ctx.resolveBomLeaves(30, 3, kit, byId)));
+  assert.deepEqual(merged.map(m => [m.item.id, m.qty]), [[1, -6]]);
+  assert.equal(ctx.calcBomCost(30, kit, byId).toFixed(2), '-0.20');
+});

@@ -143,3 +143,41 @@ test('createUser rejects short passwords and unknown roles', () => {
   assert.throws(() => app.ctx.createUser('x', 'short', 'user'), /at least/);
   assert.throws(() => app.ctx.createUser('x', 'long-enough-password', 'root'), /Role must be/);
 });
+
+test('negative BOM lines: cancelled components are untouched, net negatives are returned', () => {
+  const { app, as, item, ids } = setup();
+  const add = i => as('ada', 'add', { item: i }).item.id;
+  // NoR1 removes the 3×R1 that Sub adds; Salvage gives back 2×C1 per unit
+  const NoR1    = add({ name: 'NoR1' });
+  const Salvage = add({ name: 'Salvage' });
+  const Variant = add({ name: 'Variant' });
+  assert.ok(as('uma', 'saveBOM', { parent_id: NoR1,    lines: [{ child_id: ids.R1, quantity: -3 }] }).success);
+  assert.ok(as('uma', 'saveBOM', { parent_id: Salvage, lines: [{ child_id: ids.C1, quantity: -2 }] }).success);
+  assert.ok(as('uma', 'saveBOM', { parent_id: Variant, lines: [
+    { child_id: ids.Sub, quantity: 1 }, { child_id: NoR1, quantity: 1 }, { child_id: Salvage, quantity: 1 },
+  ] }).success);
+
+  const r1Before = item(ids.R1);
+  const r = as('uma', 'checkout', { assembly_id: Variant, qty_built: 2, job_name: 'J1' });
+  assert.ok(r.success);
+  assert.equal(item(ids.R1).qty, 100);                          // +6 −6: untouched
+  assert.equal(item(ids.R1).updated_at, r1Before.updated_at);
+  assert.equal(item(ids.C1).qty, 52);                           // 50 − 2 + 4
+  assert.deepEqual(r.results.map(x => x.id), [ids.C1]);
+
+  // The log keeps every path, including the negative ones
+  const log = as('vic', 'getCheckoutLog').entries.filter(e => e.job_name === 'J1');
+  assert.deepEqual(log.map(e => [e.component_name, e.qty_deducted]).sort(), [
+    ['C1', -4], ['C1', 2], ['R1', -6], ['R1', 6],
+  ]);
+  assert.equal(app.sheets.get('Checkout Log').getLastRow(), 5);
+
+  // Costs: Variant = 0.8 − 0.3 − 1.0 = −0.5, stored even though it's negative
+  assert.equal(item(Variant).unit_cost.toFixed(2), '-0.50');
+});
+
+test('saveBOM drops zero-quantity lines', () => {
+  const { as, ids } = setup();
+  as('uma', 'saveBOM', { parent_id: ids.Sub, lines: [{ child_id: ids.R1, quantity: 0 }, { child_id: ids.C1, quantity: -1 }] });
+  assert.deepEqual(as('uma', 'getBOMs').boms.filter(b => b.parent_id === ids.Sub).map(b => b.quantity), [-1]);
+});

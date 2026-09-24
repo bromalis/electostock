@@ -496,6 +496,8 @@ function actionAdjustQty(body) {
 
 // Build `qty_built` units of an assembly: resolve its BOM to leaf components,
 // deduct them and write the checkout log, all in one request under the lock.
+// BOM quantities may be negative, so a component's net can be positive
+// (deducted), zero (cancels out, untouched) or negative (returned to stock).
 // data = { assembly_id, qty_built, job_name }
 function actionCheckout(data) {
   const assemblyId = Number(data.assembly_id);
@@ -511,7 +513,8 @@ function actionCheckout(data) {
   if (!parent)                         return { error: 'Assembly not found: ' + assemblyId };
   if (!linesByParent.has(assemblyId))  return { error: '"' + parent.name + '" has no BOM' };
 
-  const leaves     = mergeBomLines(resolveBomLeaves(assemblyId, qtyBuilt, linesByParent, inv.byId));
+  const leaves     = mergeBomLines(resolveBomLeaves(assemblyId, qtyBuilt, linesByParent, inv.byId))
+    .filter(l => l.qty !== 0);
   const components = buildLogComponents(assemblyId, qtyBuilt, parent.name, 0, linesByParent, inv.byId);
 
   const timestamp = new Date();
@@ -537,9 +540,10 @@ function actionCheckout(data) {
   return { success: true, results, rows_written: logRows.length };
 }
 
-// Recalculate the stored unit_cost of every assembly at or above `ids`.
-// Only assemblies whose BOM cost is > 0 are written, so an empty BOM keeps a
-// manually entered cost. Returns [{ id, unit_cost }] for what changed.
+// Recalculate the stored unit_cost of every assembly at or above `ids` that
+// has BOM lines. Negative lines can make a BOM cost zero or less, which is
+// stored as-is. An item with no BOM keeps its manually entered cost.
+// Returns [{ id, unit_cost }] for what changed.
 function recalcAssemblyCosts(ids) {
   const inv           = readInventory();
   const boms          = actionGetBOMs().boms;
@@ -553,7 +557,7 @@ function recalcAssemblyCosts(ids) {
     const item = inv.byId.get(id);
     if (!item) return;
     const cost = calcBomCost(id, linesByParent, inv.byId);
-    if (cost > 0 && Math.abs(cost - item.unit_cost) > 0.000001) {
+    if (Math.abs(cost - item.unit_cost) > 0.000001) {
       const row = inv.rowOf.get(id);
       inv.sheet.getRange(row, invCol('unit_cost')).setValue(cost);
       inv.sheet.getRange(row, invCol('updated_at')).setValue(now);
@@ -639,12 +643,12 @@ function actionGetBOMs() {
 }
 
 // Replace all BOM lines for a given parent — full overwrite
-// lines = [{ child_id, quantity }, ...]
+// lines = [{ child_id, quantity }, ...]. quantity may be negative but not zero.
 function actionSaveBOM(parent_id, lines) {
   if (!parent_id) return { error: 'No parent_id' };
   const clean = (lines || [])
     .map(l => ({ child_id: Number(l.child_id), quantity: Number(l.quantity) }))
-    .filter(l => l.child_id > 0 && l.quantity > 0);
+    .filter(l => l.child_id > 0 && Number.isFinite(l.quantity) && l.quantity !== 0);
 
   const boms = actionGetBOMs().boms;
   const err  = validateBomLines(parent_id, clean, boms, readInventory().byId);

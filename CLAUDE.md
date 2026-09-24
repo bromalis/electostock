@@ -63,6 +63,17 @@ Each sheet is created on first access by its `get*Sheet()` helper. Column order 
 ### BOM logic
 - The server is authoritative. The pure functions in `Code.gs` (`resolveBomLeaves`, `mergeBomLines`, `buildLogComponents`, `calcBomCost`, `findAncestors`, `validateBomLines`) are unit-tested in `tests/code.test.js`.
 - A BOM flattens to its **leaf** components only. Intermediate sub-assemblies are expanded and never deducted themselves. Every recursive function carries a `visited` set.
-- `checkout` resolves the BOM from the sheet, writes the log rows and deducts stock (flooring at 0) in one locked request.
+- BOM quantities may be **negative, but never 0**. A negative line (on a component or a nested BOM) subtracts, so a sub-assembly can cancel parts that another one adds. After merging, each component's net is one of:
+  - positive: deducted;
+  - zero: cancels out, and the row isn't touched;
+  - negative: returned to stock.
+  Costs can therefore also be zero or negative.
+- `checkout` resolves the BOM from the sheet, writes the log rows and applies the net stock changes (deductions floor at 0) in one locked request. The log keeps one row per path, including negative ones.
 - `recalcAssemblyCosts` rewrites the stored `unit_cost` of affected assemblies after `update` (when `unit_cost` changes), `saveBOM` and `delete`. The recalculated costs come back as `cost_updates`, and the client applies them with `applyCostUpdates`.
 - `index.html` keeps its own copies of `resolveBom` / `mergeBomLines` / `calcBomCost` for previews, cost display and pick lists. Keep them consistent with the server versions.
+- `getWhereUsed` / `countInAssembly` in `index.html` power the detail panel's "Used In" section. It lists every assembly containing the item, directly or through sub-assemblies, with the net count per unit.
+- Format money with `fmtMoney` so negative costs read `−$0.50`.
+
+### Theme
+- Colours are CSS custom properties on `:root` (dark). `:root[data-theme="light"]` overrides them. Use the tokens (`--danger-text`, `--warn-text`, `--bom`, `--on-accent`, `--overlay`, …) rather than hard-coded colours. The printed pick list is the exception and stays black on white.
+- A small script in `<head>` sets `data-theme` before first paint. It uses the saved `electostock_theme` value from localStorage, or the device setting if there isn't one. `toggleTheme()` saves the choice.

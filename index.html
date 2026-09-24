@@ -3,6 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  // Saved choice wins; otherwise follow the device setting.
+  (function () {
+    let saved = null;
+    try { saved = localStorage.getItem('electostock_theme'); } catch (e) {}
+    const theme = saved || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+    document.documentElement.dataset.theme = theme;
+  })();
+</script>
 <title>ElectoStock — Component Inventory</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -13,8 +22,24 @@
     --text:#e2e8ef;--text2:#8a97a5;--text3:#505d6a;
     --accent:#00d4aa;--accent2:#007a62;--accent-dim:rgba(0,212,170,0.08);
     --warn:#f59e0b;--danger:#ef4444;
+    --danger-text:#fca5a5;--warn-text:#fcd34d;--bom:#a5b4fc;
+    --on-accent:#041a14;--accent-hover:#00f0c2;
+    --overlay:rgba(0,0,0,.72);--shadow:0 8px 24px rgba(0,0,0,.4);
     --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
     --radius:6px;
+    color-scheme:dark;
+  }
+  /* Light theme. <html data-theme> is set before first paint by the script in <head>. */
+  :root[data-theme="light"]{
+    --bg:#f4f6f8;--bg2:#ffffff;--bg3:#eaeef2;
+    --border:#dde3e9;--border2:#c9d2db;
+    --text:#14191e;--text2:#4b5763;--text3:#76828f;
+    --accent:#00896e;--accent2:#7fcfbe;--accent-dim:rgba(0,137,110,0.09);
+    --warn:#b45309;--danger:#dc2626;
+    --danger-text:#b91c1c;--warn-text:#92400e;--bom:#4f46e5;
+    --on-accent:#ffffff;--accent-hover:#007560;
+    --overlay:rgba(20,28,36,.45);--shadow:0 8px 24px rgba(20,28,36,.14);
+    color-scheme:light;
   }
   body{font-family:var(--sans);background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:14px;line-height:1.5;}
   .shell{display:flex;height:100vh;overflow:hidden;}
@@ -55,16 +80,16 @@
   .search-input:focus{border-color:var(--accent2);}
   .search-input::placeholder{color:var(--text3);}
   .btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:var(--radius);font-size:13px;font-family:var(--sans);font-weight:500;cursor:pointer;transition:all .15s;border:none;white-space:nowrap;}
-  .btn-primary{background:var(--accent);color:#041a14;}
-  .btn-primary:hover{background:#00f0c2;}
+  .btn-primary{background:var(--accent);color:var(--on-accent);}
+  .btn-primary:hover{background:var(--accent-hover);}
   .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
   .btn-ghost{background:none;border:1px solid var(--border2);color:var(--text2);}
   .btn-ghost:hover{border-color:var(--border);color:var(--text);background:var(--bg3);}
   .btn-ghost:disabled{opacity:.5;cursor:not-allowed;}
-  .btn-danger{background:none;border:1px solid rgba(239,68,68,.3);color:#fca5a5;}
+  .btn-danger{background:none;border:1px solid rgba(239,68,68,.3);color:var(--danger-text);}
   .btn-danger:hover{background:rgba(239,68,68,.1);border-color:rgba(239,68,68,.5);}
   .btn-danger:disabled{opacity:.4;cursor:not-allowed;}
-  .btn-warn{background:none;border:1px solid rgba(245,158,11,.3);color:#fcd34d;}
+  .btn-warn{background:none;border:1px solid rgba(245,158,11,.3);color:var(--warn-text);}
   .btn-warn:hover{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.5);}
   .btn-sm{padding:4px 10px;font-size:12px;}
   .btn-xs{padding:2px 7px;font-size:11px;}
@@ -76,8 +101,8 @@
   .stat-val.warn{color:var(--warn);}
 
   .alerts-panel{padding:0 24px;margin-top:16px;}
-  .alert-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);margin-bottom:6px;font-size:13px;color:#fca5a5;}
-  .alert-warn{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:#fcd34d;}
+  .alert-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);margin-bottom:6px;font-size:13px;color:var(--danger-text);}
+  .alert-warn{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:var(--warn-text);}
 
   .update-toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--accent2);border-radius:var(--radius);padding:10px 16px;font-size:12px;font-family:var(--mono);color:var(--accent);z-index:300;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none;}
   .update-toast.show{opacity:1;transform:translateY(0);}
@@ -97,7 +122,7 @@
   td.mono{font-family:var(--mono);font-size:12px;color:var(--text2);}
   .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:500;font-family:var(--mono);white-space:nowrap;}
   .badge-cat{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);}
-  .badge-bom{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);color:#a5b4fc;margin-left:4px;font-size:10px;padding:1px 6px;}
+  .badge-bom{background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.3);color:var(--bom);margin-left:4px;font-size:10px;padding:1px 6px;}
   .stock-bar-wrap{display:flex;align-items:center;gap:8px;}
   .stock-bar{width:60px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;}
   .stock-fill{height:100%;border-radius:2px;transition:width .3s;}
@@ -118,7 +143,7 @@
   .notes-cell a:hover{text-decoration:underline;}
 
   /* ── Modals ── */
-  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .15s;}
+  .modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .15s;}
   .modal-overlay.open{opacity:1;pointer-events:all;}
   .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:520px;max-width:95vw;max-height:90vh;overflow:auto;transform:translateY(8px);transition:transform .15s;}
   .modal-overlay.open .modal{transform:translateY(0);}
@@ -147,7 +172,7 @@
   .bom-picker-display{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:5px 8px;font-size:12px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;gap:4px;}
   .bom-picker-display:hover{border-color:var(--border);}
   .bom-picker-display.selected-val{color:var(--text);}
-  .bom-picker-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);z-index:300;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+  .bom-picker-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);z-index:300;box-shadow:var(--shadow);}
   .bom-picker-search-row{display:flex;gap:6px;padding:8px;}
   .bom-picker-search{flex:1;font-size:12px;padding:5px 8px;}
   .bom-picker-cat{font-size:12px;padding:5px 8px;width:auto;}
@@ -170,7 +195,7 @@
   .bom-checkout-list{display:flex;flex-direction:column;gap:2px;max-height:400px;overflow-y:auto;}
   .bom-co-assembly{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--bg2);border-radius:var(--radius);border:1px solid var(--border2);font-weight:500;font-size:13px;margin-top:4px;}
   .bom-co-assembly:first-child{margin-top:0;}
-  .bom-co-assembly-icon{color:#a5b4fc;font-size:11px;flex-shrink:0;}
+  .bom-co-assembly-icon{color:var(--bom);font-size:11px;flex-shrink:0;}
   .bom-checkout-row{display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg3);border-radius:var(--radius);border:1px solid var(--border);font-size:13px;}
   .bom-checkout-row.insufficient{border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.05);}
   .bom-co-name{flex:1;}
@@ -214,7 +239,7 @@
   .hist-comp-part{font-family:var(--mono);font-size:11px;color:var(--text3);}
   .hist-comp-loc{font-family:var(--mono);font-size:11px;color:var(--text3);}
   .hist-comp-qty{font-family:var(--mono);font-size:12px;font-weight:500;white-space:nowrap;color:var(--text2);}
-  .hist-sub-header{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:#a5b4fc;font-weight:500;}
+  .hist-sub-header{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:12px;color:var(--bom);font-weight:500;}
   .hist-sub-icon{font-size:10px;}
   .detail-panel{width:320px;flex-shrink:0;background:var(--bg2);border-left:1px solid var(--border);overflow:hidden;transition:width .2s;display:flex;flex-direction:column;height:100vh;}
   .detail-panel.closed{width:0;}
@@ -245,6 +270,9 @@
   .login-footer{font-size:11px;color:var(--text3);text-align:center;font-family:var(--mono);}
   .login-user-badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);font-family:var(--mono);}
   .login-user-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
+  .bom-qty-neg{color:var(--warn) !important;}
+  .theme-toggle{font-size:13px;line-height:1;color:var(--text3);background:none;border:1px solid var(--border2);border-radius:var(--radius);cursor:pointer;padding:3px 6px;transition:color .15s,border-color .15s;}
+  .theme-toggle:hover{color:var(--accent);border-color:var(--accent2);}
   /* Role gating (the server enforces the same rules) */
   body[data-role="viewer"] .needs-user,
   body:not([data-role="admin"]) .needs-admin{display:none !important;}
@@ -274,7 +302,9 @@
     <button class="btn btn-primary" id="login-btn" onclick="submitLogin()" style="width:100%;justify-content:center;padding:10px">
       Sign In
     </button>
-    <div class="login-footer">ElectoStock — Electronics Inventory</div>
+    <div class="login-footer" style="display:flex;align-items:center;justify-content:center;gap:8px">
+      ElectoStock — Electronics Inventory <button class="theme-toggle" onclick="toggleTheme()"></button>
+    </div>
   </div>
 </div>
 
@@ -289,14 +319,17 @@
       <div class="logo-name">Inventory</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
         <div class="login-user-badge"><span class="login-user-dot"></span><span id="sidebar-username"></span></div>
-        <button class="cat-manage-btn" onclick="logout()" style="font-size:11px">Sign out</button>
+        <span style="display:flex;align-items:center;gap:6px">
+          <button class="theme-toggle" onclick="toggleTheme()"></button>
+          <button class="cat-manage-btn" onclick="logout()" style="font-size:11px">Sign out</button>
+        </span>
       </div>
     </div>
     <nav class="nav">
       <div class="nav-label">Views</div>
       <button class="nav-item active" onclick="setView('all',this)"><span class="nav-icon">▦</span> All Components</button>
       <button class="nav-item" onclick="setView('low',this)"><span class="nav-icon" style="color:var(--danger)">⚠</span> Low Stock</button>
-      <button class="nav-item" onclick="setView('bom',this)"><span class="nav-icon" style="color:#a5b4fc">◈</span> Has BOM</button>
+      <button class="nav-item" onclick="setView('bom',this)"><span class="nav-icon" style="color:var(--bom)">◈</span> Has BOM</button>
       <button class="nav-item" onclick="setView('nobom',this)"><span class="nav-icon" style="color:var(--text3)">◇</span> No BOM</button>
       <div class="nav-label">Actions</div>
       <button class="nav-item" onclick="manualSync()"><span class="nav-icon">↻</span> Sync Now</button>
@@ -530,7 +563,7 @@
         </div>
       </div>
       <div class="bom-checkout-list" id="bom-checkout-list"></div>
-      <div id="bom-co-warning" style="display:none;padding:10px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);font-size:12px;color:#fcd34d;"></div>
+      <div id="bom-co-warning" style="display:none;padding:10px 12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);font-size:12px;color:var(--warn-text);"></div>
     </div>
     <div class="modal-footer">
       <span class="modal-err" id="bom-co-err"></span>
@@ -691,6 +724,39 @@ function hasBom(itemId) {
   return boms.some(b => b.parent_id === itemId);
 }
 
+// How many of targetId one unit of parentId contains, summed over every path
+// through sub-assemblies (negative lines subtract).
+function countInAssembly(parentId, targetId, visited = new Set()) {
+  if (visited.has(parentId)) return 0; // cycle guard
+  visited.add(parentId);
+  return getBomLines(parentId).reduce((sum, line) => {
+    if (line.child_id === targetId) return sum + line.quantity;
+    if (hasBom(line.child_id)) return sum + line.quantity * countInAssembly(line.child_id, targetId, new Set(visited));
+    return sum;
+  }, 0);
+}
+
+// Every assembly that contains itemId anywhere in its BOM tree:
+// [{ item, direct, via: [sub-assembly names, outermost first], perUnit }],
+// direct parents first.
+function getWhereUsed(itemId) {
+  const viaById = new Map();
+  const queue   = [{ id: itemId, via: [] }];
+  while (queue.length) {
+    const { id, via } = queue.shift();
+    boms.filter(b => b.child_id === id).forEach(b => {
+      if (b.parent_id === itemId || viaById.has(b.parent_id)) return;
+      const through = id === itemId ? [] : [(inventory.find(i => i.id === id) || { name: 'ID ' + id }).name, ...via];
+      viaById.set(b.parent_id, through);
+      queue.push({ id: b.parent_id, via: through });
+    });
+  }
+  return [...viaById.entries()]
+    .map(([id, via]) => ({ item: inventory.find(i => i.id === id), direct: !via.length, via, perUnit: countInAssembly(id, itemId) }))
+    .filter(u => u.item)
+    .sort((a, b) => (b.direct - a.direct) || a.item.name.localeCompare(b.item.name));
+}
+
 // Recursively resolve a BOM into a flat list of { item, qty, depth }.
 // Only LEAF items (no BOM of their own) are included — intermediate assemblies
 // are expanded into their own sub-components and not deducted directly.
@@ -839,6 +905,11 @@ function manualSync() {
 // ══════════════════════════════════════════════════════════
 //  Helpers
 // ══════════════════════════════════════════════════════════
+// Money with the sign before the currency symbol: −$0.500 rather than $-0.500
+function fmtMoney(v, digits) {
+  return (v < 0 ? '−$' : '$') + Math.abs(v).toFixed(digits);
+}
+
 function catColor(name) {
   const c = categories.find(x => x.name === name);
   return c ? c.color : '#78716c';
@@ -1011,8 +1082,8 @@ function renderTable() {
       </div></td>
       <td><span class="location-pill">${item.location||'—'}</span></td>
       <td class="mono">${hasBom(item.id)
-        ? `<span style="color:var(--accent)" title="Calculated from BOM">$${calcBomCost(item.id).toFixed(3)}</span>`
-        : `$${Number(item.unit_cost||0).toFixed(3)}`
+        ? `<span style="color:var(--accent)" title="Calculated from BOM">${fmtMoney(calcBomCost(item.id),3)}</span>`
+        : `${fmtMoney(Number(item.unit_cost||0),3)}`
       }</td>
       <td style="color:var(--text2)">${item.supplier||'—'}</td>
       <td>${notesHtml}</td>
@@ -1054,7 +1125,7 @@ function renderDetail(id) {
     const bomTotal=calcBomCost(id);
     bomHtml=`<div class="detail-section" style="display:flex;justify-content:space-between;align-items:baseline">
       <span>Bill of Materials</span>
-      <span style="font-family:var(--mono);font-size:12px;color:var(--accent)">$${bomTotal.toFixed(4)} / unit</span>
+      <span style="font-family:var(--mono);font-size:12px;color:var(--accent)">${fmtMoney(bomTotal,4)} / unit</span>
     </div>`;
     bomLines.forEach(line=>{
       const child=inventory.find(x=>x.id===line.child_id);
@@ -1064,8 +1135,8 @@ function renderDetail(id) {
       bomHtml+=`<div class="detail-bom-line">
         <span>${name}${hasNested?'<span class="badge badge-bom" style="margin-left:4px">BOM</span>':''}</span>
         <span style="display:flex;gap:8px;align-items:baseline">
-          <span class="detail-bom-qty">× ${line.quantity}</span>
-          <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">$${lineCost.toFixed(4)}</span>
+          <span class="detail-bom-qty"${line.quantity<0?' style="color:var(--warn)" title="Negative: subtracts"':''}>× ${line.quantity<0?'−'+(-line.quantity):line.quantity}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${fmtMoney(lineCost,4)}</span>
         </span>
       </div>`;
     });
@@ -1086,13 +1157,13 @@ function renderDetail(id) {
       <div class="detail-row"><span class="detail-key">Location</span><span class="detail-val">${i.location||'—'}</span></div>
       <div class="detail-row"><span class="detail-key">Unit Cost</span><span class="detail-val">${
         hasBom(id)
-          ? `<span style="color:var(--accent)" title="Calculated from BOM">$${calcBomCost(id).toFixed(4)}</span>`
-          : `$${Number(i.unit_cost||0).toFixed(4)}`
+          ? `<span style="color:var(--accent)" title="Calculated from BOM">${fmtMoney(calcBomCost(id),4)}</span>`
+          : `${fmtMoney(Number(i.unit_cost||0),4)}`
       }</span></div>
       <div class="detail-section">Supplier</div>
       <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${i.supplier||'—'}</span></div>
       <div class="detail-row"><span class="detail-key">Part #</span><span class="detail-val">${i.supplier_part||'—'}</span></div>
-      ${bomHtml}${notesHtml}
+      ${bomHtml}${renderWhereUsed(id)}${notesHtml}
     </div>
     <div class="detail-actions">
       ${hasBom(id)
@@ -1103,6 +1174,29 @@ function renderDetail(id) {
       <button class="btn btn-ghost btn-sm needs-user" onclick="openBomEditor(${id})">◈ BOM</button>
       <button class="btn btn-ghost btn-sm needs-user" onclick="openEditModal(${id},null)">Edit</button>
     </div>`;
+}
+
+// "Used In" section of the detail panel: every assembly containing this item
+function renderWhereUsed(id) {
+  const uses = getWhereUsed(id);
+  let html = `<div class="detail-section" style="display:flex;justify-content:space-between;align-items:baseline">
+    <span>Used In</span>
+    <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">${uses.length} assembl${uses.length === 1 ? 'y' : 'ies'}</span>
+  </div>`;
+  if (!uses.length) {
+    return html + `<div style="font-size:12px;color:var(--text3);padding:4px 0">Not part of any BOM</div>`;
+  }
+  uses.forEach(u => {
+    const per = u.perUnit === 0 ? 'cancels out' : `${u.perUnit < 0 ? '−' + (-u.perUnit) : u.perUnit} / unit`;
+    html += `<div class="detail-bom-line" style="cursor:pointer" onclick="selectRow(${u.item.id})" title="Open ${u.item.name.replace(/"/g, '&quot;')}">
+      <span style="min-width:0">
+        <span>${u.item.name}</span>
+        ${u.direct ? '' : `<span style="display:block;font-size:11px;color:var(--text3)">via ${u.via.join(' › ')}</span>`}
+      </span>
+      <span class="detail-bom-qty" style="white-space:nowrap${u.perUnit < 0 ? ';color:var(--warn)' : ''}">${per}</span>
+    </div>`;
+  });
+  return html;
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1265,7 +1359,7 @@ function openBomEditor(id) {
   bomEditId=id;
   const item=inventory.find(x=>x.id===id);
   document.getElementById('bom-modal-title').textContent='BOM — '+item.name;
-  document.getElementById('bom-modal-sub').textContent='Components consumed per unit checked out';
+  document.getElementById('bom-modal-sub').textContent='Components consumed per unit checked out. A negative quantity subtracts: use it to cancel parts added by a sub-assembly, or to return parts to stock.';
   document.getElementById('bom-modal-err').textContent='';
   renderBomLines();
   document.getElementById('bom-modal').classList.add('open');
@@ -1287,10 +1381,7 @@ function renderBomLines() {
   container.innerHTML = lines.map((line, idx) => {
     const child = inventory.find(i => i.id === line.child_id);
     const displayName = child ? child.name + (child.supplier_part ? ' (' + child.supplier_part + ')' : '') : '— Select component —';
-    const lineCost = child ? (hasBom(child.id) ? calcBomCost(child.id) : (child.unit_cost || 0)) * line.quantity : 0;
-    const costStr = child && lineCost > 0
-      ? `<span style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">$${lineCost.toFixed(4)}</span>`
-      : `<span style="font-size:11px;color:var(--text3)">—</span>`;
+    const costStr = `<span id="bom-cost-${idx}" style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">${bomLineCostLabel(line)}</span>`;
     return `<div class="bom-line" id="bom-line-${idx}" style="grid-template-columns:1fr 70px 60px 32px">
       <div class="bom-picker-wrap" id="picker-wrap-${idx}">
         <button class="bom-picker-display${child ? ' selected-val' : ''}" id="picker-btn-${idx}"
@@ -1312,9 +1403,9 @@ function renderBomLines() {
           <div class="bom-picker-list" id="picker-list-${idx}"></div>
         </div>
       </div>
-      <input type="number" min="1" id="bom-qty-${idx}" value="${line.quantity}"
-        onchange="updateBomLine(${idx},'quantity',this.value);renderBomLines()"
-        oninput="updateBomLine(${idx},'quantity',this.value);renderBomLines()"/>
+      <input type="number" step="any" id="bom-qty-${idx}" value="${line.quantity}" title="Negative quantities subtract"
+        class="${line.quantity < 0 ? 'bom-qty-neg' : ''}"
+        oninput="onBomQtyInput(${idx},this)" onchange="renderBomLines()"/>
       ${costStr}
       <button class="bom-remove-btn" onclick="removeBomLine(${idx})">✕</button>
     </div>`;
@@ -1323,14 +1414,35 @@ function renderBomLines() {
   // Populate each picker list with full item list initially
   lines.forEach((line, idx) => filterBomPicker(idx));
 
-  // Recompute running total
-  const total = lines.reduce((sum, line) => {
-    const child = inventory.find(i => i.id === line.child_id);
-    if (!child) return sum;
-    const cost = hasBom(child.id) ? calcBomCost(child.id) : (child.unit_cost || 0);
-    return sum + cost * line.quantity;
-  }, 0);
-  renderBomCostFooter(total);
+  renderBomCostFooter(bomWorkingTotal());
+}
+
+// Cost of one BOM line (negative for negative quantities), or 0 if no component yet
+function bomLineCost(line) {
+  const child = inventory.find(i => i.id === line.child_id);
+  if (!child) return 0;
+  return (hasBom(child.id) ? calcBomCost(child.id) : (child.unit_cost || 0)) * line.quantity;
+}
+
+function bomLineCostLabel(line) {
+  const cost = bomLineCost(line);
+  return cost !== 0 ? fmtMoney(cost, 4) : '—';
+}
+
+function bomWorkingTotal() {
+  return bomWorkingCopy ? bomWorkingCopy.lines.reduce((sum, line) => sum + bomLineCost(line), 0) : 0;
+}
+
+// Typing updates the numbers in place; re-rendering on every keystroke would
+// steal focus and make "-" (the start of a negative number) impossible to type.
+function onBomQtyInput(idx, input) {
+  const qty = Number(input.value);
+  if (input.value.trim() === '' || !Number.isFinite(qty) || qty === 0) return; // wait for a usable value
+  updateBomLine(idx, 'quantity', qty);
+  input.classList.toggle('bom-qty-neg', qty < 0);
+  const costEl = document.getElementById('bom-cost-' + idx);
+  if (costEl) costEl.textContent = bomLineCostLabel(bomWorkingCopy.lines[idx]);
+  renderBomCostFooter(bomWorkingTotal());
 }
 
 // Build/filter the option list inside a picker dropdown
@@ -1359,7 +1471,7 @@ function filterBomPicker(idx) {
   listEl.innerHTML = filtered.map(item => {
     const isActive = line && line.child_id === item.id;
     const cost = hasBom(item.id) ? calcBomCost(item.id) : (item.unit_cost || 0);
-    const costLabel = cost > 0 ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:auto">$${cost.toFixed(4)}</span>` : '';
+    const costLabel = cost !== 0 ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:auto">${fmtMoney(cost,4)}</span>` : '';
     const catDot = `<span style="width:7px;height:7px;border-radius:50%;background:${catColor(item.category)};display:inline-block;flex-shrink:0"></span>`;
     return `<div class="bom-picker-opt${isActive ? ' active' : ''}"
       onclick="selectBomPickerItem(${idx},${item.id},event)">
@@ -1414,8 +1526,8 @@ document.addEventListener('click', () => {
 function renderBomCostFooter(total) {
   const footer = document.getElementById('bom-cost-footer');
   if (!footer) return;
-  footer.innerHTML = total > 0
-    ? `<span style="color:var(--text3)">Estimated unit cost:</span> <span style="color:var(--accent);font-family:var(--mono)">$${total.toFixed(4)}</span>`
+  footer.innerHTML = total !== 0
+    ? `<span style="color:var(--text3)">Estimated unit cost:</span> <span style="color:var(--accent);font-family:var(--mono)">${fmtMoney(total, 4)}</span>`
     : `<span style="color:var(--text3)">Add components with known unit costs to see estimated total</span>`;
 }
 
@@ -1449,14 +1561,14 @@ function removeBomLine(idx) {
 
 function updateBomLine(idx, field, val) {
   ensureBomWorkingCopy();
-  bomWorkingCopy.lines[idx][field] = field === 'quantity' ? Number(val) || 1 : Number(val);
+  bomWorkingCopy.lines[idx][field] = Number(val);
 }
 
 function flushBomDomToWorkingCopy() {
   if (!bomWorkingCopy) return;
   bomWorkingCopy.lines.forEach((line, idx) => {
     const inp = document.getElementById('bom-qty-' + idx);
-    if (inp) line.quantity = Number(inp.value) || 1;
+    if (inp) line.quantity = Number(inp.value); // 0 / blank / invalid are caught in saveBom
     // child_id is kept up to date via updateBomLine() calls on selection, no DOM read needed
   });
 }
@@ -1465,7 +1577,15 @@ async function saveBom() {
   ensureBomWorkingCopy();
   flushBomDomToWorkingCopy();
   const lines = bomWorkingCopy.lines;
-  const validLines = lines.filter(l => l.child_id > 0 && l.quantity > 0);
+  // Quantities may be negative (to cancel parts added elsewhere in the tree) but not zero
+  const badQty = lines.find(l => l.child_id > 0 && (!Number.isFinite(l.quantity) || l.quantity === 0));
+  if (badQty) {
+    const child = inventory.find(i => i.id === badQty.child_id);
+    document.getElementById('bom-modal-err').textContent =
+      `Enter a quantity for "${child ? child.name : 'component'}" — it can be negative, but not 0 or blank.`;
+    return;
+  }
+  const validLines = lines.filter(l => l.child_id > 0);
   // Check for duplicates
   const childIds = validLines.map(l => l.child_id);
   if (new Set(childIds).size !== childIds.length) {
@@ -1523,53 +1643,52 @@ function refreshBomCheckoutPreview(parentId) {
   const qtyInput   = document.getElementById('bom-co-qty-input');
   const checkoutQty = Math.max(1, parseInt(qtyInput?.value) || 1);
 
-  // Flat leaf list for the actual API deduction (unchanged)
-  const resolved = resolveBom(parentId, checkoutQty);
-  const merged   = mergeBomLines(resolved);
+  // Net change per leaf component. BOM lines can be negative, so a net can be
+  // positive (deducted), zero (cancels out, untouched) or negative (returned).
+  const merged = mergeBomLines(resolveBom(parentId, checkoutQty)).filter(m => m.qty !== 0);
   bomCoData = { parentId, checkoutQty, merged };
+  const netById = new Map(mergeBomLines(resolveBom(parentId, checkoutQty)).map(m => [m.item.id, m.qty]));
 
   const list = document.getElementById('bom-checkout-list');
   const warn = document.getElementById('bom-co-warning');
   const btn  = document.getElementById('bom-co-confirm');
 
-  // Build tree HTML recursively — each BOM assembly shown as a header,
-  // its direct leaf components indented below it
+  const signed = q => (q < 0 ? '+' + (-q) : '−' + q);  // stock change: deduct is −, return is +
   let anyInsufficient = false;
 
+  // Tree: each sub-assembly as a header with its lines indented below. Rows show
+  // the quantity on that path; the stock column shows the component's net result.
   function renderTreeLevel(pid, multiplier, depth) {
-    const lines = getBomLines(pid);
     let html = '';
     const indent = depth * 18; // px indent per level
 
-    lines.forEach(line => {
+    getBomLines(pid).forEach(line => {
       const child = inventory.find(i => i.id === line.child_id);
       if (!child) return;
       const qty = line.quantity * multiplier;
 
       if (hasBom(child.id)) {
-        // Sub-assembly header
         html += `<div class="bom-co-assembly" style="margin-left:${indent}px">
           <span class="bom-co-assembly-icon">◈</span>
           <span style="flex:1">${child.name}</span>
-          <span style="font-family:var(--mono);font-size:12px;color:var(--text3)">×${qty}</span>
+          <span style="font-family:var(--mono);font-size:12px;color:${qty < 0 ? 'var(--warn)' : 'var(--text3)'}">×${qty < 0 ? '−' + (-qty) : qty}</span>
         </div>`;
-        // Recurse into sub-assembly
         html += renderTreeLevel(child.id, qty, depth + 1);
       } else {
-        // Leaf component — find its merged deduction qty for stock display
-        const mergedEntry = merged.find(m => m.item.id === child.id);
-        // For stock display use the qty at this line, not the merged total,
-        // since we want to show per-path quantities
-        const after       = child.qty - qty;
-        const insufficient = after < 0;
+        const net   = netById.get(child.id) || 0;
+        const after = child.qty - net;
+        const insufficient = net > 0 && after < 0;
         if (insufficient) anyInsufficient = true;
-        const stockClass  = insufficient ? 'bad' : (child.min > 0 && after < child.min) ? 'warn' : 'ok';
+        const stockClass = insufficient ? 'bad' : (child.min > 0 && after < child.min) ? 'warn' : 'ok';
+        const stock = net === 0
+          ? `<span class="bom-co-stock" title="Positive and negative lines cancel out">${child.qty} · cancels</span>`
+          : `<span class="bom-co-stock ${stockClass}"${net !== qty ? ` title="Net across the whole BOM: ${signed(net)}"` : ''}>${child.qty}→${Math.max(0, after)}${net !== qty ? ` <span style="color:var(--text3)">(net ${signed(net)})</span>` : ''}</span>`;
         html += `<div class="bom-checkout-row ${insufficient ? 'insufficient' : ''}" style="margin-left:${indent}px">
           <span class="bom-co-name">${child.name}
             ${child.supplier_part ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:4px">${child.supplier_part}</span>` : ''}
           </span>
-          <span class="bom-co-qty">−${qty}</span>
-          <span class="bom-co-stock ${stockClass}">${child.qty}→${Math.max(0, after)}</span>
+          <span class="bom-co-qty"${qty < 0 ? ' style="color:var(--accent)"' : ''}>${signed(qty)}</span>
+          ${stock}
         </div>`;
       }
     });
@@ -1577,7 +1696,12 @@ function refreshBomCheckoutPreview(parentId) {
   }
 
   const treeHtml = renderTreeLevel(parentId, checkoutQty, 0);
-  list.innerHTML = treeHtml || '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">No components in BOM</div>';
+  const returned = merged.filter(m => m.qty < 0);
+  const returnsNote = returned.length
+    ? `<div style="font-size:12px;color:var(--text2);padding:8px 2px 0">↩ ${returned.length} component${returned.length !== 1 ? 's' : ''} will be returned to stock: ${
+        returned.map(m => `${m.item.name} +${-m.qty}`).join(', ')}</div>`
+    : '';
+  list.innerHTML = (treeHtml + returnsNote) || '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">No components in BOM</div>';
 
   if (anyInsufficient) {
     warn.style.display = 'block';
@@ -1630,7 +1754,7 @@ async function confirmBomCheckout(printAfter=false) {
     render();
     if (selectedId) renderDetail(selectedId);
     setSyncStatus('ok', 'BOM checkout saved ' + new Date().toLocaleTimeString());
-    showToast(`↑ Checked out ${snapshotData.checkoutQty}× — ${(r.results||[]).length} components decremented`);
+    showToast(`↑ Checked out ${snapshotData.checkoutQty}× — stock updated for ${(r.results||[]).length} component${(r.results||[]).length!==1?'s':''}`);
     if (printAfter && printWindow) {
       writePickListToWindow(printWindow, snapshotData.parentId, snapshotData.checkoutQty, snapshotData.merged);
     }
@@ -1932,7 +2056,12 @@ function exportHistoryCSV() {
 async function deleteItem(id,e) {
   if(e)e.stopPropagation();
   const i=inventory.find(x=>x.id===id);
-  if(!confirm(`Delete "${i.name}"? This cannot be undone.`))return;
+  const uses=getWhereUsed(id).filter(u=>u.direct);
+  const usedIn=uses.length
+    ?`
+
+It will also be removed from ${uses.length} BOM${uses.length!==1?'s':''}: ${uses.map(u=>u.item.name).join(', ')}.`:'';
+  if(!confirm(`Delete "${i.name}"? This cannot be undone.${usedIn}`))return;
   try {
     const r=await api('delete',{id});
     inventory=inventory.filter(x=>x.id!==id);
@@ -1949,9 +2078,8 @@ function printPickList(id, e) {
   if (!parent) return;
   const qty = parseInt(prompt(`How many units of "${parent.name}" are you building?`, '1')) || 1;
   if (qty < 1) return;
-  const resolved = resolveBom(id, qty);
-  const merged   = mergeBomLines(resolved);
-  if (!merged.length) { alert('No components found in BOM.'); return; }
+  const merged = mergeBomLines(resolveBom(id, qty)).filter(m => m.qty !== 0);
+  if (!merged.length) { alert('No components to pick: the BOM is empty or its lines cancel out.'); return; }
   const w = window.open('', '_blank');
   if (w) writePickListToWindow(w, id, qty, merged);
 }
@@ -1972,7 +2100,7 @@ function writePickListToWindow(w, parentId, qty, merged) {
       <td>${item.supplier_part || '—'}</td>
       <td>${item.name}</td>
       <td>${item.location || '—'}</td>
-      <td class="qty-cell">${q}</td>
+      <td class="qty-cell">${q < 0 ? `<span class="return">Return ${-q}</span>` : q}</td>
       <td class="check-cell"><span class="check-box"></span></td>
     </tr>`).join('');
 
@@ -1997,6 +2125,7 @@ function writePickListToWindow(w, parentId, qty, merged) {
   tbody tr:nth-child(even) { background: #fafafa; }
   td { padding: 9px 10px; vertical-align: middle; }
   .qty-cell { font-weight: 600; text-align: center; font-size: 14px; width: 70px; }
+  .qty-cell .return { font-size: 12px; white-space: nowrap; }
   .check-cell { width: 50px; text-align: center; }
   .check-box { display: inline-block; width: 18px; height: 18px; border: 1.5px solid #aaa; border-radius: 3px; }
   .footer { margin-top: 20px; font-size: 11px; color: #aaa; text-align: right; }
@@ -2116,6 +2245,34 @@ function exportBOMs() {
   a.download = 'electronics_boms.csv';
   a.click();
 }
+
+// ══════════════════════════════════════════════════════════
+//  Theme
+// ══════════════════════════════════════════════════════════
+function savedTheme() {
+  try { return localStorage.getItem('electostock_theme'); } catch (e) { return null; }
+}
+
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  document.querySelectorAll('.theme-toggle').forEach(b => {
+    b.textContent = theme === 'light' ? '☾' : '☀';
+    b.title       = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+    b.setAttribute('aria-label', b.title);
+  });
+}
+
+function toggleTheme() {
+  const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+  try { localStorage.setItem('electostock_theme', next); } catch (e) {}
+  applyTheme(next);
+}
+
+// Until someone picks a theme, keep following the device setting
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', e => {
+  if (!savedTheme()) applyTheme(e.matches ? 'light' : 'dark');
+});
+applyTheme(document.documentElement.dataset.theme || 'dark');
 
 // ══════════════════════════════════════════════════════════
 //  Auth
