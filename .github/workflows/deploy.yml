@@ -1,0 +1,84 @@
+# Test on every push; on main, then update the database and publish the page.
+#
+#   push (any branch) ─► test ─► [main only] database ─► pages
+#
+# Secrets (Settings > Secrets and variables > Actions):
+#   SUPABASE_ACCESS_TOKEN  supabase.com > Account > Access Tokens
+#   SUPABASE_DB_PASSWORD   the project's database password
+# Pages must be set to Settings > Pages > Source: GitHub Actions.
+name: Test and deploy
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys from main run one at a time, in order; a newer push waits rather than
+# cancelling one halfway. Other branches just test.
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'deploy-main' || format('test-{0}', github.ref) }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  # Applies migrations in supabase/migrations that the project hasn't run yet,
+  # each in its own transaction. Runs before the page is published, so a new
+  # page never meets an old database.
+  database:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      PROJECT_REF: tnjledlrzwtnocvmtgrf
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+      - name: Link the Supabase project
+        run: supabase link --project-ref "$PROJECT_REF"
+      # ONE-TIME: these three were applied by hand in the SQL Editor before this
+      # pipeline existed. Record them as applied so they aren't run again.
+      # Remove this step after the first successful run.
+      - name: Record hand-applied migrations (one-time)
+        run: supabase migration repair --status applied 20260924000000 20260924000001 20260924000002
+      - name: Migrations still to apply
+        run: supabase db push --dry-run
+      - name: Apply migrations
+        run: supabase db push --yes
+
+  # Publishes only index.html (not the rest of the repo).
+  pages:
+    needs: database
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Collect the site
+        run: mkdir _site && cp index.html _site/ && touch _site/.nojekyll
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v5

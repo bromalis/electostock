@@ -17,14 +17,18 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 
 ## Commands
 
-- Run all tests with `npm test` (`node --test`, Node 18+). Run one file with `node --test tests/db/schema.test.mjs`, or one test with `node --test --test-name-pattern="checkout"`. GitHub Actions (`.github/workflows/test.yml`) runs the tests on every push.
+- Run all tests with `npm test` (`node --test`, Node 18+). Run one file with `node --test tests/db/schema.test.mjs`, or one test with `node --test --test-name-pattern="checkout"`.
 - `npm install` fetches the only dependency, `@electric-sql/pglite`. It is a dev dependency, used by the database tests.
 - Import from the sheet: `node scripts/import-sheet.mjs <folder with the CSVs> [out.sql]`, then run the generated SQL in the Supabase SQL Editor. The script replaces all inventory data and leaves users alone. The generated SQL contains real data, so keep it out of the repo.
 
 ## Deploying
 
-- **Frontend:** pushing to `main` publishes it on GitHub Pages at https://bromalis.github.io/electostock/. `SUPABASE_URL` and `SUPABASE_KEY` sit at the top of the main `<script>`. The key is the *publishable* key, which is public by design. Never put a `service_role` or secret key in the page.
-- **Database:** migrations are applied by pasting them into the Supabase SQL Editor, once each, in filename order. Add changes as a **new** migration file; never edit one that has already been applied. `tests/db/harness.mjs` runs every file in `supabase/migrations/` in order, so the tests always cover the full chain.
+- **Pipeline** (`.github/workflows/deploy.yml`): every push runs the tests. On `main`, if they pass, two more jobs run:
+  1. `database` runs `supabase db push`, which applies any migrations in `supabase/migrations/` the project hasn't run yet.
+  2. `pages` publishes `index.html` alone to GitHub Pages at https://bromalis.github.io/electostock/.
+  The database job uses the repository secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`.
+- **Migrations:** add changes as a **new** migration file named `<yyyymmddhhmmss>_<name>.sql`; never edit one that has already been applied. The database is updated a minute before the page, so migrations must keep working with the page currently live: add tables, columns and functions, and remove old ones only in a later release, once the page no longer uses them. `tests/db/harness.mjs` runs every migration in order, so the tests always cover the full chain. Don't apply migrations by pasting them into the SQL Editor: the pipeline wouldn't know they ran. If one ever is applied by hand, record it with `supabase migration repair --status applied <version>`.
+- **Page config:** `SUPABASE_URL` and `SUPABASE_KEY` sit at the top of the main `<script>`. The key is the *publishable* key, which is public by design. Never put a `service_role` or secret key in the page.
 - **Auth settings** live in the Supabase dashboard, not in the repo:
   - Site URL and Redirect URLs must include every page origin that sends emailed links, including `http://localhost:8765/` for local testing.
   - Email sign-ups must stay **enabled**. Invite-only is enforced by the `handle_new_user` trigger.
