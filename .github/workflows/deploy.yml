@@ -53,11 +53,6 @@ jobs:
           version: 2.117.0
       - name: Link the Supabase project
         run: supabase link --project-ref "$PROJECT_REF"
-      # ONE-TIME: these three were applied by hand in the SQL Editor before this
-      # pipeline existed. Record them as applied so they aren't run again.
-      # Remove this step after the first successful run.
-      - name: Record hand-applied migrations (one-time)
-        run: supabase migration repair --status applied 20260924000000 20260924000001 20260924000002
       - name: Migrations still to apply
         run: supabase db push --dry-run
       - name: Apply migrations
