@@ -33,6 +33,8 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   - Site URL and Redirect URLs must include every page origin that sends emailed links, including `http://localhost:8765/` for local testing.
   - Email sign-ups must stay **enabled**. Invite-only is enforced by the `handle_new_user` trigger.
   - Minimum password length is 8, the same as `MIN_PASSWORD_LENGTH` in `index.html`.
+  - Email goes out over custom SMTP. For now that is Gmail (`smtp.gmail.com:465`, sending as ben@aerolab.com with an app password), a stopgap until Resend on `mail.aerolab.com` is set up. Supabase's built-in sender only delivers to members of the Supabase organisation.
+  - The wording of the invite, sign-in-link and reset emails lives in Authentication > Emails > Templates. First-time invites use the "Confirm signup" template, because `signInWithOtp` creates the user; existing users get "Magic Link"; resets use "Reset Password".
 - **Local testing:** serve `index.html` at `http://localhost:8765/`. It talks to the real project, so use obviously named test data and remove it afterwards.
 
 ## Architecture
