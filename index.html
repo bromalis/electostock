@@ -279,11 +279,14 @@
   .user-row select{width:auto;padding:4px 8px;font-size:12px;}
   .user-pw-row{display:flex;gap:6px;align-items:center;}
   .user-pw-row input{font-family:var(--mono);font-size:12px;padding:5px 8px;}
-  .pw-notice{background:var(--accent-dim);border:1px solid var(--accent2);border-radius:var(--radius);padding:10px 12px;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--text2);}
-  .pw-notice-row{display:flex;gap:6px;align-items:center;}
-  .pw-notice code{flex:1;min-width:0;font-family:var(--mono);font-size:13px;color:var(--text);background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:5px 8px;user-select:all;overflow-wrap:anywhere;}
   .role-help{font-size:11px;color:var(--text3);line-height:1.6;}
   .role-help b{color:var(--text2);font-weight:500;}
+  .login-links{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:-6px;}
+  .link-btn{background:none;border:none;padding:0;font-size:12px;color:var(--accent);cursor:pointer;font-family:var(--sans);}
+  .link-btn:hover{text-decoration:underline;}
+  .login-info{font-size:12px;color:var(--text2);text-align:center;min-height:0;}
+  /* Until Supabase has restored any saved session, don't flash the login form */
+  body.auth-pending .login-card{visibility:hidden;}
   .theme-toggle{font-size:13px;line-height:1;color:var(--text3);background:none;border:1px solid var(--border2);border-radius:var(--radius);cursor:pointer;padding:3px 6px;transition:color .15s,border-color .15s;}
   .theme-toggle:hover{color:var(--accent);border-color:var(--accent2);}
   /* Role gating (the server enforces the same rules) */
@@ -291,7 +294,7 @@
   body:not([data-role="admin"]) .needs-admin{display:none !important;}
 </style>
 </head>
-<body>
+<body class="auth-pending">
 
 <!-- ══ Login Screen ══ -->
 <div class="login-screen" id="login-screen">
@@ -303,8 +306,8 @@
     </div>
     <form id="login-form" onsubmit="event.preventDefault();submitLogin()" style="display:flex;flex-direction:column;gap:20px">
     <div class="form-group">
-      <label class="form-label" for="login-username">Username</label>
-      <input id="login-username" name="username" type="text" placeholder="Username" autocomplete="username"
+      <label class="form-label" for="login-username">Email</label>
+      <input id="login-username" name="username" type="email" placeholder="you@example.com" autocomplete="username"
         onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('login-password').focus();}"/>
     </div>
     <div class="form-group">
@@ -316,6 +319,11 @@
       Sign In
     </button>
     </form>
+    <div class="login-links">
+      <button type="button" class="link-btn" onclick="sendSignInLink()">First time here? Email me a sign-in link</button>
+      <button type="button" class="link-btn" onclick="sendPasswordReset()">Forgot password?</button>
+    </div>
+    <div class="login-info" id="login-info"></div>
     <div class="login-footer" style="display:flex;align-items:center;justify-content:center;gap:8px">
       ElectoStock — Electronics Inventory <button class="theme-toggle" onclick="toggleTheme()"></button>
     </div>
@@ -396,7 +404,7 @@
 
     <div class="table-wrap">
       <div class="loading-overlay" id="loading-overlay">
-        <div class="spinner"></div> Loading from Google Sheets…
+        <div class="spinner"></div> Loading…
       </div>
       <table id="inv-table" style="display:none">
         <thead><tr>
@@ -543,7 +551,7 @@
       <span id="bom-modal-err" style="font-size:12px;color:var(--danger);min-height:16px;display:block"></span>
     </div>
     <div class="modal-footer">
-      <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-right:auto">Saves to shared sheet</span>
+      <span style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-right:auto">Saves for everyone</span>
       <button class="btn btn-ghost" onclick="closeBomModal()">Cancel</button>
       <button class="btn btn-primary" id="bom-save-btn" onclick="saveBom()">Save BOM</button>
     </div>
@@ -598,33 +606,26 @@
       <button class="close-btn" onclick="closeUsersModal()">✕</button>
     </div>
     <div class="modal-body">
-      <div id="user-pw-notice" style="display:none"></div>
       <div class="user-list" id="user-list"></div>
       <div class="role-help">
         <b>Viewer</b>: read only. <b>User</b>: edit items, adjust stock, check out, edit BOMs and categories.
         <b>Admin</b>: everything, including deleting items and categories and managing users.
-        Changing someone's role or password signs them out, and the change applies when they sign in again.
+        Role changes apply straight away.
       </div>
       <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;flex-direction:column;gap:10px;">
-        <div class="cat-section-label">Add User</div>
+        <div class="cat-section-label">Invite Someone</div>
         <div class="form-row">
-          <div class="form-group"><label class="form-label" for="new-user-name">Username</label>
-            <input id="new-user-name" placeholder="e.g. alice" autocomplete="off" spellcheck="false"/></div>
+          <div class="form-group"><label class="form-label" for="new-user-email">Email</label>
+            <input id="new-user-email" type="email" placeholder="name@example.com" autocomplete="off" spellcheck="false"/></div>
           <div class="form-group"><label class="form-label" for="new-user-role">Role</label>
             <select id="new-user-role"><option value="viewer">Viewer</option><option value="user" selected>User</option><option value="admin">Admin</option></select></div>
         </div>
-        <div class="form-group"><label class="form-label" for="new-user-pw">Password</label>
-          <div class="user-pw-row">
-            <input id="new-user-pw" type="text" autocomplete="off" spellcheck="false" placeholder="At least 8 characters"/>
-            <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('new-user-pw').value=generatePassword()">Generate</button>
-          </div>
-          <span style="font-size:11px;color:var(--text3)">Shown in plain text so you can pass it on. You'll get one more chance to copy it after saving.</span>
-        </div>
-        <div style="display:flex;justify-content:flex-end">
-          <button class="btn btn-primary btn-sm" id="add-user-btn" onclick="addUser()">Add User</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+          <span style="font-size:11px;color:var(--text3)">They'll get an email with a sign-in link, then choose their own password.</span>
+          <button class="btn btn-primary btn-sm" id="add-user-btn" onclick="inviteUser()">Send Invite</button>
         </div>
       </div>
-      <span id="users-modal-err" style="font-size:12px;color:var(--danger);min-height:16px;display:block"></span>
+            <span id="users-modal-err" style="font-size:12px;color:var(--danger);min-height:16px;display:block"></span>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeUsersModal()">Done</button>
@@ -632,18 +633,19 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="pw-modal" onclick="if(event.target.id==='pw-modal')closePasswordModal()">
+<div class="modal-overlay" id="pw-modal" onclick="if(event.target.id==='pw-modal'&&pwMode==='change')closePasswordModal()">
   <div class="modal modal-sm">
     <div class="modal-header">
-      <div class="modal-title">Change Password</div>
-      <button class="close-btn" type="button" onclick="closePasswordModal()">✕</button>
+      <div class="modal-title" id="pw-modal-title">Change Password</div>
+      <button class="close-btn" type="button" id="pw-close-x" onclick="closePasswordModal()">✕</button>
     </div>
     <form id="pw-form" onsubmit="event.preventDefault();changeOwnPassword()">
       <div class="modal-body">
         <!-- Lets the password manager tie the new password to this account -->
         <input id="pw-username" name="username" type="text" autocomplete="username" readonly style="display:none"/>
-        <div class="form-group"><label class="form-label" for="pw-current">Current password</label>
-          <input id="pw-current" name="current-password" type="password" autocomplete="current-password" required/></div>
+        <div id="pw-intro" style="font-size:13px;color:var(--text2);display:none"></div>
+        <div class="form-group" id="pw-current-group"><label class="form-label" for="pw-current">Current password</label>
+          <input id="pw-current" name="current-password" type="password" autocomplete="current-password"/></div>
         <div class="form-group"><label class="form-label" for="pw-new">New password</label>
           <input id="pw-new" name="new-password" type="password" autocomplete="new-password" minlength="8" required placeholder="At least 8 characters"/></div>
         <div class="form-group"><label class="form-label" for="pw-confirm">Confirm new password</label>
@@ -651,11 +653,11 @@
         <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);cursor:pointer">
           <input type="checkbox" id="pw-show" style="width:auto" onchange="togglePasswordVisibility(this.checked)"/> Show passwords
         </label>
-        <div style="font-size:11px;color:var(--text3)">Your other devices will be signed out. You'll stay signed in here.</div>
+        <div style="font-size:11px;color:var(--text3)" id="pw-note">Your other devices will be signed out. You'll stay signed in here.</div>
         <span id="pw-modal-err" style="font-size:12px;color:var(--danger);min-height:16px;display:block"></span>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" type="button" onclick="closePasswordModal()">Cancel</button>
+        <button class="btn btn-ghost" type="button" id="pw-cancel-btn" onclick="closePasswordModal()">Cancel</button>
         <button class="btn btn-primary" type="submit" id="pw-save-btn">Change Password</button>
       </div>
     </form>
@@ -690,24 +692,35 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"
+  integrity="sha384-K1nraABOP/zFehpLIUksXebbs7jMpB8gYMlb+uhVKZcWT/9Vkq1+qhv6ndC+1Yuz" crossorigin="anonymous"></script>
 <script>
 // ╔══════════════════════════════════════════════════════════╗
 //  CONFIG — the only section you need to edit
-//  To point this app at a different Google Sheet:
-//    1. Open your Apps Script Web App
-//    2. Deploy > Manage deployments > copy the /exec URL
-//    3. Paste it below, replacing the existing URL
+//  Supabase project: Project Settings > API. The publishable key is meant to
+//  be public; row-level security in the database decides what each user can do.
 // ╚══════════════════════════════════════════════════════════╝
-const SHEET_URL        = 'https://script.google.com/macros/s/AKfycbzbSuWw-DXNsrO0WFPz9mFENL_75r-g1Kt8IzYSucpEGmYndtQhY1K4-ntYtxqshUc-/exec';
-const POLL_INTERVAL_MS = 30_000; // How often to check for sheet changes (ms)
+const SUPABASE_URL = 'https://tnjledlrzwtnocvmtgrf.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_HzFIPbDEhWRX7g9A6E_FgA_nNi4PQnV';
 // ════════════════════════════════════════════════════════════
 
+// Where links in invite, sign-in and password-reset emails bring people back to.
+// Must be listed under Authentication > URL Configuration > Redirect URLs.
+const APP_URL = location.origin + location.pathname;
+
+// Implicit flow: an emailed link must work on any device, including when an
+// admin's browser requested it (invites), which the default PKCE flow can't do.
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true, autoRefreshToken: true },
+});
+
 // ══════════════════════════════════════════════════════════
-//  Auth state
+//  Auth state (managed by Supabase; mirrored here for the UI)
 // ══════════════════════════════════════════════════════════
-let sessionToken    = localStorage.getItem('electostock_token')    || null;
-let sessionUsername = localStorage.getItem('electostock_username') || null;
-let sessionRole     = localStorage.getItem('electostock_role')     || 'user';
+let sessionToken    = null;      // access token while signed in
+let sessionUsername = null;      // email of the signed-in user
+let sessionUserId   = null;
+let sessionRole     = 'viewer';
 
 const COLOR_PALETTE = [
   '#8a97a5','#3b82f6','#a855f7','#10b981','#f59e0b','#ef4444',
@@ -733,79 +746,127 @@ let sortCol     = 'name';
 let sortDir     = 1;
 let newCatColor = COLOR_PALETTE[0];
 let openPopover = null;
-let lastKnownTimestamp = null;
-let pollTimer   = null;
 let isSyncing   = false;
+let resyncPending = false; // a change arrived while a sync was running
 let historyEntries = [];
 
 // ══════════════════════════════════════════════════════════
 //  API
 // ══════════════════════════════════════════════════════════
-// Apps Script replies through a one-time redirect that intermittently fails
-// (404 or no response) even when the script itself ran. Reads are safe to retry.
-// Writes are not: the change may already be saved, so instead of retrying we
-// refresh the data and tell the user to check before trying again.
-const RETRYABLE_ACTIONS = new Set([
-  'login', 'logout', 'getAll', 'getAll+getCats', 'getCats', 'getBOMs', 'getCheckoutLog', 'getLastModified',
-  'listUsers',
-]);
-const RETRY_DELAYS_MS    = [1000, 3000];
-const REQUEST_TIMEOUT_MS = 60_000;
+// api(action, data) keeps the action names and response shapes the screens
+// were written against; each one maps to a Supabase query or database function.
+// Permissions are enforced by row-level security in the database.
 
-// One round trip. Throws on any transport failure (network, timeout, non-2xx, non-JSON).
-async function postToBackend(action, data) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    // POST keeps passwords and tokens out of URLs. text/plain avoids a CORS
-    // preflight, which Apps Script web apps can't answer.
-    const res = await fetch(SHEET_URL, {
-      method:   'POST',
-      redirect: 'follow',
-      headers:  { 'Content-Type': 'text/plain;charset=utf-8' },
-      body:     JSON.stringify({ action, data }),
-      signal:   controller.signal,
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
-  } finally {
-    clearTimeout(timer);
-  }
+const num = v => Number(v) || 0;
+const ITEM_FIELDS = ['part', 'name', 'category', 'qty', 'min', 'location', 'unit_cost', 'supplier', 'supplier_part', 'notes'];
+
+function toItem(r) {
+  return { ...r, qty: num(r.qty), min: num(r.min), unit_cost: num(r.unit_cost) };
 }
 
+function itemFields(item) {
+  const out = {};
+  ITEM_FIELDS.forEach(f => { if (item[f] !== undefined) out[f] = item[f]; });
+  return out;
+}
+
+// Unwrap a supabase-js { data, error } result, turning database errors into
+// messages people can act on.
+function ok({ data, error }) {
+  if (!error) return data;
+  if (error.code === 'PGRST303' || /JWT expired|invalid JWT/i.test(error.message)) {
+    showLogin('Your session has ended. Please sign in again.');
+  }
+  const message =
+      error.code === '23505' ? 'That already exists.'
+    : error.code === '42501' || /row-level security/i.test(error.message) ? 'Your role is not allowed to do that.'
+    : error.code === 'PGRST116' ? 'Not found, or your role is not allowed to change it.'
+    : error.message;
+  throw new Error(message);
+}
+
+// Updates and deletes blocked by row-level security affect no rows rather than
+// failing, so check that something happened.
+function changed(rows, what) {
+  if (!rows || !rows.length) throw new Error(`${what} not found, or your role is not allowed to change it.`);
+  return rows;
+}
+
+const ACTIONS = {
+  async 'getAll+getCats'() {
+    const [items, cats, lines, me] = await Promise.all([
+      sb.from('items').select('*').order('id'),
+      sb.from('categories').select('*').order('name'),
+      sb.from('bom_lines').select('*'),
+      sb.from('profiles').select('role').eq('user_id', sessionUserId).maybeSingle(),
+    ]);
+    return {
+      items:      ok(items).map(toItem),
+      categories: ok(cats),
+      boms:       ok(lines).map(b => ({ parent_id: b.parent_id, child_id: b.child_id, quantity: num(b.quantity) })),
+      role:       ok(me)?.role || null,
+    };
+  },
+  async add({ item }) {
+    return { item: toItem(ok(await sb.from('items').insert(itemFields(item)).select().single())) };
+  },
+  // Partial update: only the fields sent are written. Assembly costs above this
+  // item are recalculated by the database and arrive through live updates.
+  async update({ item }) {
+    const rows = changed(ok(await sb.from('items').update(itemFields(item)).eq('id', item.id).select()), 'Item');
+    return { item: toItem(rows[0]), cost_updates: [] };
+  },
+  async delete({ id }) {
+    changed(ok(await sb.from('items').delete().eq('id', id).select('id')), 'Item');
+    return { cost_updates: [] };
+  },
+  async adjustQty({ id, action, qty }) {
+    return { newQty: num(ok(await sb.rpc('adjust_qty', { p_id: id, p_action: action, p_qty: qty }))) };
+  },
+  async checkout({ assembly_id, qty_built, job_name }) {
+    const r = ok(await sb.rpc('checkout', { p_assembly_id: assembly_id, p_qty_built: qty_built, p_job_name: job_name }));
+    return { ...r, results: (r.results || []).map(x => ({ id: x.id, newQty: num(x.newQty) })) };
+  },
+  async saveBOM({ parent_id, lines }) {
+    const r = ok(await sb.rpc('save_bom', { p_parent_id: parent_id, p_lines: lines }));
+    return { cost_updates: (r || []).map(x => ({ id: x.id, unit_cost: num(x.unit_cost) })) };
+  },
+  async addCat({ name, color }) {
+    ok(await sb.from('categories').insert({ name, color }));
+    return {};
+  },
+  async updateCat({ oldName, name, color }) {
+    changed(ok(await sb.from('categories').update({ name, color }).eq('name', oldName).select('name')), 'Category');
+    return {};
+  },
+  async deleteCat({ name }) {
+    changed(ok(await sb.from('categories').delete().eq('name', name).select('name')), 'Category');
+    return {};
+  },
+  async getCheckoutLog({ limit = 100 } = {}) {
+    const rows = ok(await sb.from('checkout_log').select('*')
+      .order('created_at', { ascending: false }).order('id', { ascending: true }).limit(limit));
+    return { entries: rows.map(r => ({
+      timestamp:         r.created_at,
+      job_name:          r.job_name,
+      assembly_name:     r.assembly_name,
+      assembly_id:       r.assembly_id,
+      qty_built:         num(r.qty_built),
+      component_name:    r.component_name,
+      supplier_part:     r.component_supplier_part,
+      location:          r.component_location,
+      qty_deducted:      num(r.qty_deducted),
+      sub_assembly_name: r.sub_assembly_name,
+      depth:             r.depth,
+      user_email:        r.user_email,
+    })) };
+  },
+};
+
 async function api(action, data = {}) {
-  // Include session token with every request (login doesn't need one)
-  if (action !== 'login' && action !== 'logout' && sessionToken) {
-    data = { ...data, token: sessionToken };
-  }
-  let json;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      json = await postToBackend(action, data);
-      break;
-    } catch (err) {
-      // A timed-out request is often still running on Google's side; retrying
-      // would only add load. Retry fast failures (the flaky redirect's 404) only.
-      if (err.name === 'AbortError') {
-        if (!RETRYABLE_ACTIONS.has(action)) syncAll(true);
-        throw new Error(RETRYABLE_ACTIONS.has(action)
-          ? 'Google Sheets took too long to respond. Try again in a moment.'
-          : 'Google Sheets took too long to respond, so this may or may not have been saved. '
-            + 'The data has been refreshed: check it before trying again.');
-      }
-      if (!RETRYABLE_ACTIONS.has(action)) {
-        syncAll(true);
-        throw new Error('No reply from Google Sheets, so this may or may not have been saved. '
-          + 'The data has been refreshed: check it before trying again.');
-      }
-      if (attempt >= RETRY_DELAYS_MS.length) throw err;
-      await new Promise(r => setTimeout(r, RETRY_DELAYS_MS[attempt]));
-    }
-  }
-  // If server says not authenticated, kick back to login
-  if (json.auth === false) { showLogin(json.error); throw new Error(json.error); }
-  if (json.error) throw new Error(json.error);
-  return json;
+  const fn = ACTIONS[action];
+  if (!fn) throw new Error('Unknown action: ' + action);
+  return fn(data);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -936,12 +997,12 @@ function showToast(msg) {
 }
 
 async function syncAll(silent = false) {
-  if (isSyncing) return;
+  if (isSyncing) { resyncPending = true; return; }
   isSyncing = true;
   if (!silent) {
     setSyncStatus('syncing', 'Loading…');
     document.getElementById('loading-overlay').style.display = 'flex';
-    document.getElementById('loading-overlay').innerHTML = '<div class="spinner"></div> Loading from Google Sheets…';
+    document.getElementById('loading-overlay').innerHTML = '<div class="spinner"></div> Loading…';
     document.getElementById('inv-table').style.display = 'none';
     document.getElementById('empty-state').style.display = 'none';
   }
@@ -950,7 +1011,8 @@ async function syncAll(silent = false) {
     inventory          = r.items      || [];
     categories         = r.categories || [];
     boms               = r.boms       || [];
-    lastKnownTimestamp = r.timestamp  || null;
+    // Role changes apply at once in the database; keep the buttons in step
+    if (r.role && r.role !== sessionRole) { sessionRole = r.role; document.body.dataset.role = sessionRole; }
     setSyncStatus('ok', 'Synced ' + new Date().toLocaleTimeString());
     render();
     if (!silent) {
@@ -968,47 +1030,54 @@ async function syncAll(silent = false) {
       document.getElementById('loading-overlay').innerHTML = `
         <div style="text-align:center;color:var(--danger)">
           <div style="font-size:24px;margin-bottom:8px">⊗</div>
-          <div style="font-weight:500;margin-bottom:4px">Could not reach Google Sheets</div>
+          <div style="font-weight:500;margin-bottom:4px">Could not load the inventory</div>
           <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${err.message}</div>
           <button class="btn btn-ghost btn-sm" onclick="manualSync()">Retry</button>
         </div>`;
     }
-  } finally { isSyncing = false; }
+  } finally {
+    isSyncing = false;
+    if (resyncPending) { resyncPending = false; syncAll(true); }
+  }
 }
 
-// Each request is an Apps Script execution. Overlapping ones make Google start
-// extra script instances, which is slow, so never stack polls and don't poll
-// from tabs nobody is looking at.
-let pollInFlight = false;
+// ══════════════════════════════════════════════════════════
+//  Live updates
+// ══════════════════════════════════════════════════════════
+// The database pushes every change to items, BOM lines and categories (from
+// anyone, including this tab). Each burst of changes triggers one silent re-sync,
+// which also brings in assembly costs the database recalculated.
+let liveChannel = null;
+let liveTimer   = null;
 
-async function poll() {
-  if (isSyncing || pollInFlight || document.hidden || !sessionToken) return;
-  pollInFlight = true;
-  try {
-    const r = await api('getLastModified');
-    if (r.last_modified && r.last_modified !== lastKnownTimestamp) {
-      setSyncStatus('poll', 'Updating…');
-      showToast('↻ Sheet updated — refreshing…');
-      await syncAll(true);
-      setSyncStatus('ok', 'Updated ' + new Date().toLocaleTimeString());
-    }
-  } catch(err) { /* silent */ }
-  finally { pollInFlight = false; }
+function scheduleResync() {
+  clearTimeout(liveTimer);
+  liveTimer = setTimeout(() => syncAll(true), 300);
 }
 
-// Catch up as soon as a hidden tab is shown again
+function startLiveUpdates() {
+  stopLiveUpdates();
+  liveChannel = sb.channel('inventory-changes');
+  ['items', 'bom_lines', 'categories'].forEach(table =>
+    liveChannel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleResync));
+  liveChannel.subscribe(status => {
+    if (status === 'SUBSCRIBED') setSyncStatus('ok', 'Live · ' + new Date().toLocaleTimeString());
+    else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncStatus('error', 'Live updates paused');
+  });
+}
+
+function stopLiveUpdates() {
+  if (liveChannel) sb.removeChannel(liveChannel);
+  liveChannel = null;
+}
+
+// Live updates can pause while a tab sleeps; catch up when it's shown again
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && pollTimer) poll();
+  if (!document.hidden && sessionToken) scheduleResync();
 });
 
-function startPolling() {
-  if (pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(poll, POLL_INTERVAL_MS);
-}
-
 function manualSync() {
-  clearInterval(pollTimer);
-  syncAll(false).then(startPolling);
+  syncAll(false);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1846,7 +1915,7 @@ async function confirmBomCheckout(printAfter=false) {
 
   try {
     const jobName    = document.getElementById('bom-co-jobname').value.trim() + ' ' + document.getElementById('bom-co-job').value.trim();
-    // The server re-resolves the BOM from the sheet, deducts the leaf components
+    // The database re-resolves the BOM, applies the leaf components' net changes
     // and writes the checkout log in one locked request.
     const r = await api('checkout', {
       assembly_id: bomCoData.parentId,
@@ -2356,18 +2425,43 @@ function exportBOMs() {
 }
 
 // ══════════════════════════════════════════════════════════
-//  Change own password (any signed-in user)
+//  Passwords (any signed-in user)
 // ══════════════════════════════════════════════════════════
+// One dialog, three modes:
+//   change   — from the sidebar; needs the current password
+//   first    — after signing in from an invite / sign-in link with no password yet
+//   recovery — after following a "forgot password" link
+const MIN_PASSWORD_LENGTH = 8; // must match Authentication > Email > Minimum password length
 const PW_FIELDS = ['pw-current', 'pw-new', 'pw-confirm'];
+let pwMode = 'change';
 
-function openPasswordModal() {
+const PW_MODES = {
+  change:   { title: 'Change Password', button: 'Change Password', closable: true,  intro: '',
+              note: "Your other devices will be signed out. You'll stay signed in here." },
+  first:    { title: 'Choose a Password', button: 'Save Password', closable: false,
+              intro: 'Welcome! Choose a password so you can sign in with your email and password next time.', note: '' },
+  recovery: { title: 'Set a New Password', button: 'Save Password', closable: false,
+              intro: 'Choose a new password for your account.', note: 'Your other devices will be signed out.' },
+};
+
+function openPasswordModal(mode = 'change') {
+  pwMode = mode;
+  const m = PW_MODES[mode];
   PW_FIELDS.forEach(id => document.getElementById(id).value = '');
   document.getElementById('pw-username').value = sessionUsername || '';
+  document.getElementById('pw-modal-title').textContent = m.title;
+  document.getElementById('pw-save-btn').textContent = m.button;
+  document.getElementById('pw-current-group').style.display = mode === 'change' ? '' : 'none';
+  document.getElementById('pw-close-x').style.display = m.closable ? '' : 'none';
+  document.getElementById('pw-cancel-btn').style.display = m.closable ? '' : 'none';
+  const intro = document.getElementById('pw-intro');
+  intro.textContent = m.intro; intro.style.display = m.intro ? '' : 'none';
+  document.getElementById('pw-note').textContent = m.note;
   document.getElementById('pw-show').checked = false;
   togglePasswordVisibility(false);
   document.getElementById('pw-modal-err').textContent = '';
   document.getElementById('pw-modal').classList.add('open');
-  setTimeout(() => document.getElementById('pw-current').focus(), 50);
+  setTimeout(() => document.getElementById(mode === 'change' ? 'pw-current' : 'pw-new').focus(), 50);
 }
 
 function closePasswordModal() {
@@ -2384,41 +2478,40 @@ async function changeOwnPassword() {
   const next    = document.getElementById('pw-new').value;
   const confirm = document.getElementById('pw-confirm').value;
   const err     = document.getElementById('pw-modal-err');
-  if (!current)                           { err.textContent = 'Enter your current password.'; return; }
+  if (pwMode === 'change' && !current)    { err.textContent = 'Enter your current password.'; return; }
   if (next.length < MIN_PASSWORD_LENGTH)  { err.textContent = `The new password needs at least ${MIN_PASSWORD_LENGTH} characters.`; return; }
   if (next !== confirm)                   { err.textContent = "The new passwords don't match."; return; }
   const btn = document.getElementById('pw-save-btn');
+  const label = btn.textContent;
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
   err.textContent = '';
   try {
-    await api('changePassword', { current_password: current, new_password: next });
+    if (pwMode === 'change') {
+      // Supabase doesn't check the old password on update, so confirm it first
+      const check = await sb.auth.signInWithPassword({ email: sessionUsername, password: current });
+      if (check.error) throw new Error('Your current password is incorrect.');
+    }
+    const { error } = await sb.auth.updateUser({ password: next, data: { password_set: true } });
+    if (error) throw new Error(error.message);
+    if (pwMode !== 'first') await sb.auth.signOut({ scope: 'others' });
     offerToSavePassword(sessionUsername, next);
     closePasswordModal();
-    showToast('Password changed. Your other devices have been signed out.');
+    showToast(pwMode === 'first' ? 'Password saved.' : 'Password changed. Your other devices have been signed out.');
   } catch (e) {
     err.textContent = 'Error: ' + e.message;
   } finally {
-    btn.disabled = false; btn.textContent = 'Change Password';
+    btn.disabled = false; btn.textContent = label;
   }
 }
 
 // ══════════════════════════════════════════════════════════
-//  Users (admin only; the server enforces it too)
+//  Users (admin only; the database enforces it too)
 // ══════════════════════════════════════════════════════════
 const ROLE_LABELS = { viewer: 'Viewer', user: 'User', admin: 'Admin' };
-const MIN_PASSWORD_LENGTH = 8; // must match MIN_PASSWORD_LENGTH in Code.gs
-let usersList = [];      // [{ username, role, active_sessions, is_self }]
-let openPwIdx = null;    // row whose "set password" field is open
+let usersList = [];   // [{ user_id, email, role, is_self, pending, last_sign_in_at }]
 
 function escapeHtml(v) {
   return String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
-// 16 characters from an alphabet without look-alikes (0/O, 1/l/I)
-function generatePassword() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-  const bytes = crypto.getRandomValues(new Uint32Array(16));
-  return [...bytes].map(b => chars[b % chars.length]).join('');
 }
 
 function setUsersError(msg) { document.getElementById('users-modal-err').textContent = msg || ''; }
@@ -2436,182 +2529,154 @@ async function offerToSavePassword(username, password) {
   }
 }
 
-// Passwords can't be read back from the server, so show a newly set one once
-function showPasswordNotice(username, password, isSelf) {
-  const box = document.getElementById('user-pw-notice');
-  box.className = 'pw-notice';
-  box.style.display = 'flex';
-  box.innerHTML = `
-    <div>New password for <b>${escapeHtml(username)}</b>. Copy it now: it can't be shown again.
-      ${isSelf ? 'Your browser may also offer to save it.' : ''}</div>
-    <div class="pw-notice-row">
-      <code id="user-pw-notice-value"></code>
-      <button class="btn btn-primary btn-sm" id="user-pw-copy" onclick="copyNoticePassword()">Copy</button>
-      <button class="btn btn-ghost btn-sm" onclick="hidePasswordNotice()">Done</button>
-    </div>`;
-  document.getElementById('user-pw-notice-value').textContent = password;
+// Emails a sign-in link. For an invited email that has no account yet, Supabase
+// creates the account (with the invited role) when it sends the link.
+async function emailSignInLink(email) {
+  const { error } = await sb.auth.signInWithOtp({ email, options: { emailRedirectTo: APP_URL, shouldCreateUser: true } });
+  if (error) throw new Error(authErrorMessage(error));
 }
 
-function hidePasswordNotice() {
-  const box = document.getElementById('user-pw-notice');
-  box.style.display = 'none';
-  box.innerHTML = '';
-}
-
-async function copyNoticePassword() {
-  const value = document.getElementById('user-pw-notice-value').textContent;
-  const btn   = document.getElementById('user-pw-copy');
-  try {
-    await navigator.clipboard.writeText(value);
-    btn.textContent = 'Copied';
-  } catch (e) {
-    // Clipboard API blocked: select the text, try the legacy copy command,
-    // and otherwise leave it selected so it can be copied by hand
-    const range = document.createRange();
-    range.selectNodeContents(document.getElementById('user-pw-notice-value'));
-    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(range);
-    let copied = false;
-    try { copied = document.execCommand('copy'); } catch (e2) {}
-    btn.textContent = copied ? 'Copied' : 'Press Ctrl+C';
-  }
+function authErrorMessage(error) {
+  if (/saving new user|not been invited/i.test(error.message)) return "That email hasn't been invited. Ask an admin to invite you.";
+  if (error.status === 429 || /rate limit|security purposes/i.test(error.message)) return 'Too many emails were sent recently. Wait a few minutes and try again.';
+  if (/Invalid login credentials/i.test(error.message)) return 'Wrong email or password.';
+  if (/Email not confirmed/i.test(error.message)) return 'Confirm your email first: use the link in the email you were sent.';
+  return error.message;
 }
 
 function openUsersModal() {
   setUsersError('');
-  hidePasswordNotice();
-  openPwIdx = null;
-  ['new-user-name', 'new-user-pw'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('new-user-email').value = '';
   document.getElementById('new-user-role').value = 'user';
   document.getElementById('users-modal').classList.add('open');
   loadUsers();
 }
 
-function closeUsersModal() {
-  hidePasswordNotice(); // don't leave a password on screen
-  document.getElementById('users-modal').classList.remove('open');
-}
+function closeUsersModal() { document.getElementById('users-modal').classList.remove('open'); }
 
 async function loadUsers() {
   const list = document.getElementById('user-list');
   if (!usersList.length) list.innerHTML = '<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px 0"><div class="spinner"></div></div>';
   try {
-    usersList = (await api('listUsers')).users || [];
+    usersList = ok(await sb.rpc('admin_list_users')) || [];
     renderUserList();
   } catch (err) {
     setUsersError('Error: ' + err.message);
   }
 }
 
+function userStatus(u) {
+  if (u.pending) return 'invite not sent';
+  if (!u.last_sign_in_at) return 'invited · not signed in yet';
+  return 'last signed in ' + new Date(u.last_sign_in_at).toLocaleDateString();
+}
+
 function renderUserList() {
   const list = document.getElementById('user-list');
   if (!usersList.length) { list.innerHTML = '<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px 0">No users</div>'; return; }
   list.innerHTML = usersList.map((u, idx) => {
-    const sessions = u.active_sessions
-      ? `signed in · ${u.active_sessions} device${u.active_sessions !== 1 ? 's' : ''}` : 'signed out';
     const roleOptions = Object.keys(ROLE_LABELS)
       .map(r => `<option value="${r}"${r === u.role ? ' selected' : ''}>${ROLE_LABELS[r]}</option>`).join('');
-    const pwRow = openPwIdx === idx ? `
-      <div class="user-pw-row">
-        <input id="user-pw-${idx}" type="text" autocomplete="off" spellcheck="false" placeholder="New password (8+ characters)"/>
-        <button class="btn btn-ghost btn-sm" type="button" onclick="document.getElementById('user-pw-${idx}').value=generatePassword()">Generate</button>
-        <button class="btn btn-primary btn-sm" id="user-pw-save-${idx}" onclick="saveUserPassword(${idx})">Save</button>
-      </div>` : '';
+    const canResend = u.pending || !u.last_sign_in_at;
+    const buttons = u.pending
+      ? `<button class="btn btn-ghost btn-xs" id="user-act-${idx}" onclick="resendInvite(${idx})">Send invite</button>
+         <button class="btn btn-danger btn-xs" onclick="cancelInvite(${idx})">Cancel</button>`
+      : `${canResend ? `<button class="btn btn-ghost btn-xs" id="user-act-${idx}" onclick="resendInvite(${idx})">Resend invite</button>`
+                     : `<button class="btn btn-ghost btn-xs" id="user-act-${idx}" onclick="sendResetFor(${idx})" title="Email them a link to set a new password">Reset password</button>`}
+         ${u.is_self ? '' : `<button class="btn btn-danger btn-xs" id="user-del-${idx}" onclick="deleteUser(${idx})">Delete</button>`}`;
     return `<div class="user-item">
       <div class="user-row">
-        <span class="user-name">${escapeHtml(u.username)}${u.is_self ? ' <span class="user-meta">(you)</span>' : ''}</span>
-        <span class="user-meta">${sessions}</span>
-        <select id="user-role-${idx}" onchange="changeUserRole(${idx}, this)"${u.is_self ? ' disabled title="Another admin has to change your role"' : ''}>${roleOptions}</select>
-        <button class="btn btn-ghost btn-xs" onclick="togglePwRow(${idx})">${openPwIdx === idx ? 'Cancel' : 'Password'}</button>
-        ${u.is_self ? '' : `<button class="btn btn-danger btn-xs" id="user-del-${idx}" onclick="deleteUser(${idx})">Delete</button>`}
-      </div>${pwRow}
+        <span class="user-name" title="${escapeHtml(u.email)}">${escapeHtml(u.email)}${u.is_self ? ' <span class="user-meta">(you)</span>' : ''}</span>
+        <span class="user-meta">${userStatus(u)}</span>
+        <select id="user-role-${idx}" onchange="changeUserRole(${idx}, this)"${u.is_self || u.pending ? ' disabled' : ''}
+          ${u.is_self ? 'title="Another admin has to change your role"' : ''}>${roleOptions}</select>
+        ${buttons}
+      </div>
     </div>`;
   }).join('');
-  if (openPwIdx !== null) document.getElementById('user-pw-' + openPwIdx)?.focus();
 }
 
-function togglePwRow(idx) {
-  openPwIdx = openPwIdx === idx ? null : idx;
+// Run fn with the row's action button showing a spinner
+async function withRowButton(idx, id, fn) {
+  const btn = document.getElementById(id);
+  const label = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
   setUsersError('');
-  renderUserList();
+  try { await fn(); }
+  catch (err) { setUsersError('Error: ' + err.message); }
+  finally { if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = label; } }
 }
 
 async function changeUserRole(idx, select) {
   const u = usersList[idx];
   const role = select.value;
   setUsersError('');
-  if (!confirm(`Change ${u.username} to ${ROLE_LABELS[role]}? They'll be signed out and get the new role when they sign in again.`)) {
-    select.value = u.role;
-    return;
-  }
+  if (!confirm(`Change ${u.email} to ${ROLE_LABELS[role]}? It applies straight away.`)) { select.value = u.role; return; }
   select.disabled = true;
   try {
-    await api('saveUser', { username: u.username, role });
+    ok(await sb.rpc('admin_set_role', { p_user_id: u.user_id, p_role: role }));
     await loadUsers();
   } catch (err) {
-    select.value = u.role;
-    select.disabled = false;
+    select.value = u.role; select.disabled = false;
     setUsersError('Error: ' + err.message);
   }
 }
 
-async function saveUserPassword(idx) {
+async function sendResetFor(idx) {
   const u = usersList[idx];
-  const password = document.getElementById('user-pw-' + idx).value;
-  if (password.length < MIN_PASSWORD_LENGTH) { setUsersError(`Passwords need at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
-  const btn = document.getElementById('user-pw-save-' + idx);
-  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
-  setUsersError('');
-  try {
-    await api('saveUser', { username: u.username, role: u.role, password });
-    openPwIdx = null;
-    showPasswordNotice(u.username, password, u.is_self);
-    if (u.is_self) offerToSavePassword(u.username, password);
+  await withRowButton(idx, 'user-act-' + idx, async () => {
+    const { error } = await sb.auth.resetPasswordForEmail(u.email, { redirectTo: APP_URL });
+    if (error) throw new Error(authErrorMessage(error));
+    showToast(`Password reset email sent to ${u.email}`);
+  });
+}
+
+async function resendInvite(idx) {
+  const u = usersList[idx];
+  await withRowButton(idx, 'user-act-' + idx, async () => {
+    await emailSignInLink(u.email);
+    showToast(`Invite sent to ${u.email}`);
     await loadUsers();
-    showToast(u.is_self
-      ? 'Password changed. Your other devices have been signed out.'
-      : `Password changed for ${u.username}. They've been signed out.`);
-  } catch (err) {
-    btn.disabled = false; btn.textContent = 'Save';
-    setUsersError('Error: ' + err.message);
-  }
+  });
+}
+
+async function cancelInvite(idx) {
+  const u = usersList[idx];
+  if (!confirm(`Cancel the invite for ${u.email}?`)) return;
+  try { ok(await sb.rpc('admin_cancel_invite', { p_email: u.email })); await loadUsers(); }
+  catch (err) { setUsersError('Error: ' + err.message); }
 }
 
 async function deleteUser(idx) {
   const u = usersList[idx];
-  if (!confirm(`Delete ${u.username}? They'll be signed out and won't be able to sign in again.`)) return;
-  const btn = document.getElementById('user-del-' + idx);
-  if (btn) { btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>'; }
-  setUsersError('');
-  try {
-    await api('deleteUser', { username: u.username });
-    openPwIdx = null;
+  if (!confirm(`Delete ${u.email}? They lose access immediately.`)) return;
+  await withRowButton(idx, 'user-del-' + idx, async () => {
+    ok(await sb.rpc('admin_delete_user', { p_user_id: u.user_id }));
     await loadUsers();
-  } catch (err) {
-    if (btn) { btn.disabled = false; btn.textContent = 'Delete'; }
-    setUsersError('Error: ' + err.message);
-  }
+  });
 }
 
-async function addUser() {
-  const username = document.getElementById('new-user-name').value.trim();
-  const role     = document.getElementById('new-user-role').value;
-  const password = document.getElementById('new-user-pw').value;
-  if (!/^[A-Za-z0-9._@-]{1,40}$/.test(username)) { setUsersError('Usernames are 1-40 letters, numbers or . _ @ -'); return; }
-  if (password.length < MIN_PASSWORD_LENGTH) { setUsersError(`Passwords need at least ${MIN_PASSWORD_LENGTH} characters.`); return; }
+async function inviteUser() {
+  const email = document.getElementById('new-user-email').value.trim().toLowerCase();
+  const role  = document.getElementById('new-user-role').value;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { setUsersError('Enter a valid email address.'); return; }
   const btn = document.getElementById('add-user-btn');
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
   setUsersError('');
   try {
-    await api('saveUser', { username, role, password, create: true });
-    showPasswordNotice(username, password, false);
-    document.getElementById('new-user-name').value = '';
-    document.getElementById('new-user-pw').value = '';
+    ok(await sb.rpc('admin_invite', { p_email: email, p_role: role }));
+    try {
+      await emailSignInLink(email);
+      showToast(`Invite sent to ${email} (${ROLE_LABELS[role]})`);
+    } catch (mailErr) {
+      setUsersError(`Invite saved, but the email couldn't be sent: ${mailErr.message} Use "Send invite" to try again.`);
+    }
+    document.getElementById('new-user-email').value = '';
     await loadUsers();
-    showToast(`Added ${username} (${ROLE_LABELS[role]})`);
   } catch (err) {
     setUsersError('Error: ' + err.message);
   } finally {
-    btn.disabled = false; btn.textContent = 'Add User';
+    btn.disabled = false; btn.textContent = 'Send Invite';
   }
 }
 
@@ -2647,72 +2712,129 @@ applyTheme(document.documentElement.dataset.theme || 'dark');
 //  Auth
 // ══════════════════════════════════════════════════════════
 function showLogin(errMsg) {
+  document.body.classList.remove('auth-pending');
   document.getElementById('login-screen').classList.remove('hidden');
   document.getElementById('main-shell').style.display = 'none';
   document.getElementById('login-err').textContent = errMsg || '';
-  document.getElementById('login-username').value  = '';
   document.getElementById('login-password').value  = '';
-  sessionToken    = null;
-  sessionUsername = null;
-  sessionRole     = 'user';
-  localStorage.removeItem('electostock_token');
-  localStorage.removeItem('electostock_username');
-  localStorage.removeItem('electostock_role');
-  clearInterval(pollTimer);
+  sessionToken = sessionUsername = sessionUserId = null;
+  sessionRole  = 'viewer';
+  stopLiveUpdates();
 }
 
-function showApp(username) {
+function showApp(email) {
+  document.body.classList.remove('auth-pending');
   document.body.dataset.role = sessionRole;
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('main-shell').style.display = 'flex';
-  document.getElementById('sidebar-username').textContent = username || '';
+  document.getElementById('sidebar-username').textContent = email || '';
 }
 
+function setLoginInfo(msg) {
+  document.getElementById('login-err').textContent = '';
+  document.getElementById('login-info').textContent = msg || '';
+}
+
+// A Supabase session exists: load the role, then the data, then go live.
+async function startSession(session) {
+  sessionToken    = session.access_token;
+  sessionUsername = session.user.email;
+  sessionUserId   = session.user.id;
+  const profile = await sb.from('profiles').select('role').eq('user_id', session.user.id).maybeSingle();
+  if (!profile.data) {
+    await sb.auth.signOut({ scope: 'local' });
+    showLogin("This account doesn't have access. Ask an admin to invite you.");
+    return false;
+  }
+  sessionRole = profile.data.role;
+  showApp(sessionUsername);
+  syncAll(false);
+  startLiveUpdates();
+  return true;
+}
+
+let sessionStarted  = false;
+let passwordSignIn  = false; // set while submitLogin is signing in with a password
+
+async function handleAuthEvent(event, session) {
+  if (session) sessionToken = session.access_token;
+  if (event === 'SIGNED_OUT' || !session) {
+    sessionStarted = false;
+    showLogin(document.getElementById('login-err').textContent);
+    return;
+  }
+  if (event === 'PASSWORD_RECOVERY') {
+    if (!sessionStarted) { sessionStarted = true; await startSession(session); }
+    openPasswordModal('recovery');
+    return;
+  }
+  if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && !sessionStarted) {
+    sessionStarted = true;
+    const started = await startSession(session);
+    // Arrived from an invite or sign-in link and never chose a password
+    if (started && !passwordSignIn && !session.user.user_metadata?.password_set) openPasswordModal('first');
+  }
+}
+
+// Supabase advises not calling other Supabase methods inside this callback
+// directly, so hand each event off to a separate task.
+sb.auth.onAuthStateChange((event, session) => { setTimeout(() => handleAuthEvent(event, session), 0); });
+
 async function submitLogin() {
-  const username = document.getElementById('login-username').value.trim();
+  const email    = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
   const btn      = document.getElementById('login-btn');
   const err      = document.getElementById('login-err');
-  if (!username || !password) { err.textContent = 'Enter your username and password.'; return; }
-  err.textContent = '';
-  btn.disabled    = true;
-  btn.innerHTML   = '<div class="spinner"></div>';
+  setLoginInfo('');
+  if (!email || !password) { err.textContent = 'Enter your email and password.'; return; }
+  btn.disabled  = true;
+  btn.innerHTML = '<div class="spinner"></div>';
+  passwordSignIn = true;
   try {
-    const r = await api('login', { username, password });
-    sessionToken    = r.token;
-    sessionUsername = r.username;
-    sessionRole     = r.role || 'user';
-    localStorage.setItem('electostock_token',    r.token);
-    localStorage.setItem('electostock_username', r.username);
-    localStorage.setItem('electostock_role',     sessionRole);
-    offerToSavePassword(r.username, password);
-    showApp(r.username);
-    syncAll(false).then(startPolling);
-  } catch(e) {
-    err.textContent = e.message || 'Login failed';
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(authErrorMessage(error));
+    offerToSavePassword(email, password);
+    // They clearly have a password; don't ask them to choose one later
+    if (!data.user.user_metadata?.password_set) sb.auth.updateUser({ data: { password_set: true } });
+  } catch (e) {
+    err.textContent = e.message || 'Sign-in failed';
   } finally {
     btn.disabled    = false;
     btn.textContent = 'Sign In';
+    setTimeout(() => { passwordSignIn = false; }, 1000);
   }
+}
+
+function loginEmail() {
+  const email = document.getElementById('login-username').value.trim();
+  if (!email) {
+    document.getElementById('login-err').textContent = 'Enter your email address first.';
+    document.getElementById('login-username').focus();
+  }
+  return email;
+}
+
+async function sendSignInLink() {
+  const email = loginEmail(); if (!email) return;
+  setLoginInfo('Sending…');
+  try {
+    await emailSignInLink(email);
+    setLoginInfo(`Check ${email} for a sign-in link. It expires in an hour.`);
+  } catch (e) {
+    setLoginInfo(''); document.getElementById('login-err').textContent = e.message;
+  }
+}
+
+async function sendPasswordReset() {
+  const email = loginEmail(); if (!email) return;
+  setLoginInfo('Sending…');
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: APP_URL });
+  if (error) { setLoginInfo(''); document.getElementById('login-err').textContent = authErrorMessage(error); return; }
+  setLoginInfo(`If ${email} has an account, a password reset link is on its way.`);
 }
 
 async function logout() {
-  if (sessionToken) {
-    api('logout', { token: sessionToken }).catch(() => {});
-  }
-  showLogin();
-}
-
-// ══════════════════════════════════════════════════════════
-//  Init
-// ══════════════════════════════════════════════════════════
-if (sessionToken) {
-  // Stored token — attempt to resume session
-  showApp(sessionUsername);
-  syncAll(false).catch(() => showLogin('Session expired, please sign in again')).then(startPolling);
-} else {
-  // No token — show login
-  showLogin();
+  await sb.auth.signOut({ scope: 'local' }); // this device only
 }
 </script>
 </body>
