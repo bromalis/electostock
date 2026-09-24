@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log.
 
 - `index.html`: a standalone single-page frontend (inline CSS and JS, no framework, no build step). It is served by GitHub Pages and talks to Supabase through `supabase-js`, loaded from jsDelivr and pinned with an SRI hash.
+- `assets/`: the Aerolab logo shown in the sidebar and on the login screen (`aerolab-logo.png`, trimmed and scaled to 480 px wide), the browser-tab icon (`favicon-32.png`, the logo's "A" on a transparent square) and the phone home-screen icon (`apple-touch-icon.png`, the same "A" on white).
 - `supabase/migrations/*.sql`: the whole backend. It contains the Postgres schema, the row-level security (RLS) policies, the triggers and the database functions.
 - `scripts/import-sheet.mjs`: a one-off import from CSV exports of the old Google Sheet.
 - `Code.gs`: Apps Script bound to the old Google Sheet. It keeps a read-only copy of the data there, refreshed hourly, and answers any old copy of the app with "moved". It is deployed with clasp; `.clasp.json`, `.claspignore` and `appsscript.json` belong to it. See "Google Sheet copy" below.
@@ -26,7 +27,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - **Workflow:** `main` is the only long-lived branch, and pushing to it deploys. For anything non-trivial, work on a branch: pushing it runs the tests without deploying. Merge into `main` when ready, then delete the branch.
 - **Pipeline** (`.github/workflows/deploy.yml`): every push runs the tests. On `main`, if they pass, two more jobs run:
   1. `database` runs `supabase db push`, which applies any migrations in `supabase/migrations/` the project hasn't run yet.
-  2. `pages` publishes `index.html` alone to GitHub Pages at https://bromalis.github.io/electostock/.
+  2. `pages` publishes `index.html` and `assets/` to GitHub Pages at https://bromalis.github.io/electostock/, and nothing else from the repo. Anything else the page needs at runtime must be added to the "Collect the site" step.
   The database job uses the repository secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`.
   - GitHub Pages is set to Source: GitHub Actions, so only this workflow publishes the site. A push whose tests fail changes nothing live.
   - The Supabase access token expires. When the `database` job starts failing on authentication, generate a new token in Supabase (Account > Access Tokens, scoped to the project) and update the secret.

@@ -58,7 +58,7 @@ jobs:
       - name: Apply migrations
         run: supabase db push --yes
 
-  # Publishes only index.html (not the rest of the repo).
+  # Publishes only the page and its images (not the rest of the repo).
   pages:
     needs: database
     runs-on: ubuntu-latest
@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Collect the site
-        run: mkdir _site && cp index.html _site/ && touch _site/.nojekyll
+        run: mkdir _site && cp -r index.html assets _site/ && touch _site/.nojekyll
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site

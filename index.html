@@ -13,6 +13,8 @@
   })();
 </script>
 <title>ElectoStock — Component Inventory</title>
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -46,6 +48,7 @@
 
   .sidebar{width:224px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
   .logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);}
+  .brand-logo{display:block;width:100%;max-width:150px;height:auto;margin-bottom:10px;}
   .logo-mark{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;margin-bottom:2px;}
   .logo-name{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-.01em;}
   .nav{padding:12px 10px;flex-shrink:0;}
@@ -263,6 +266,7 @@
   .login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;}
   .login-screen.hidden{display:none;}
   .login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:36px 40px;width:360px;max-width:95vw;display:flex;flex-direction:column;gap:20px;}
+  .login-brand-logo{display:block;width:200px;max-width:100%;height:auto;margin-bottom:14px;}
   .login-logo-mark{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:2px;}
   .login-logo-name{font-size:22px;font-weight:600;color:var(--text);letter-spacing:-.01em;margin-bottom:4px;}
   .login-subtitle{font-size:13px;color:var(--text3);}
@@ -301,7 +305,8 @@
 <div class="login-screen" id="login-screen">
   <div class="login-card">
     <div>
-      <div class="login-logo-mark">⬡ ElectoStock</div>
+      <img class="login-brand-logo" src="assets/aerolab-logo.png" alt="Aerolab" width="480" height="182">
+      <div class="login-logo-mark">ElectoStock</div>
       <div class="login-logo-name">Inventory</div>
       <div class="login-subtitle">Sign in to continue</div>
     </div>
@@ -338,7 +343,8 @@
   <!-- ══ Sidebar ══ -->
   <aside class="sidebar">
     <div class="logo">
-      <div class="logo-mark">⬡ ElectoStock</div>
+      <img class="brand-logo" src="assets/aerolab-logo.png" alt="Aerolab" width="480" height="182">
+      <div class="logo-mark">ElectoStock</div>
       <div class="logo-name">Inventory</div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;">
         <div class="login-user-badge"><span class="login-user-dot"></span><span id="sidebar-username"></span></div>
