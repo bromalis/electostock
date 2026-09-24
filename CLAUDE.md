@@ -21,6 +21,9 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   - `npm run push` uploads the code without changing what the live URL serves.
   - `npm run deploy` runs the tests, uploads, then updates the live Web App deployment to a new version. The `/exec` URL stays the same.
   - `clasp push` replaces the whole online project, so edits made only in the browser editor are lost. The repo is the source of truth.
+  - The scripts use `clasp push -f`. Without `-f`, clasp stops to ask before overwriting the manifest. Run non-interactively, it prints "Skipping push." and exits 0, so `update-deployment` then republishes the **old** code.
+  - After a deploy, check the live version with `clasp clone <scriptId> <version>` into a scratch folder and diff it against `Code.gs`.
+  - Google Workspace makes you sign in again periodically. If clasp fails with `invalid_rapt`, run `clasp login` again.
   - On Windows PowerShell, use `npm.cmd` / `clasp.cmd` if script execution is disabled.
 - **Frontend:** served by GitHub Pages from the root of `main` (https://bromalis.github.io/electostock/). Pushing to `main` publishes it. `SHEET_URL` near the top of the `<script>` in `index.html` holds the deployed `/exec` URL.
 - The frontend and backend share one request format. Run `npm run deploy` and push to `main` back to back.
