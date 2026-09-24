@@ -9,11 +9,11 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - `index.html`: a standalone single-page frontend (inline CSS and JS, no framework, no build step). It is served by GitHub Pages and talks to Supabase through `supabase-js`, loaded from jsDelivr and pinned with an SRI hash.
 - `supabase/migrations/*.sql`: the whole backend. It contains the Postgres schema, the row-level security (RLS) policies, the triggers and the database functions.
 - `scripts/import-sheet.mjs`: a one-off import from CSV exports of the old Google Sheet.
-- `Code.gs`: the legacy Google Apps Script backend, bound to the old Google Sheet. It is being retired; see "Legacy Apps Script" below.
+- `Code.gs`: Apps Script bound to the old Google Sheet. It keeps a read-only copy of the data there, refreshed hourly, and answers any old copy of the app with "moved". See "Google Sheet copy" below.
 - `tests/`:
   - `tests/db/`: tests that run the migrations against PGlite (Postgres compiled to WebAssembly).
   - `tests/import.test.mjs`: tests for the import script.
-  - `tests/*.test.js`: tests for the legacy `Code.gs`, run against in-memory fakes in `tests/fakes.js`.
+  - `tests/sheet-copy.test.mjs`: runs `Code.gs` against stand-ins for the Apps Script services, feeding it a real snapshot from PGlite.
 
 ## Commands
 
@@ -74,6 +74,11 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - A script in `<head>` sets `data-theme` before first paint, from the saved `electostock_theme` value or the device setting.
 - Format money with `fmtMoney` so negative values read `−$0.50`.
 
-## Legacy Apps Script
+## Google Sheet copy (`Code.gs`)
 
-`Code.gs` and its clasp setup (`.clasp.json`, `.claspignore`, `appsscript.json`, and the `push` / `deploy` npm scripts) belong to the old Google Sheet backend. `clasp push` replaces the whole online project, and clasp may need `clasp login` again whenever Google Workspace asks you to sign in again.
+- `refreshSheetCopy()` runs every hour on a time trigger, installed once with `installHourlyRefresh()`.
+  - It calls `export_snapshot(p_token)` (migration `…_sheet_export.sql`) as the anonymous API role, sending the publishable key in the `apikey` header only.
+  - It rewrites the Inventory, Categories, BOMs and Checkout Log tabs, keeping the old column order with any new columns appended, and protects them so only the owner can edit.
+- The token is in Script Properties as `EXPORT_TOKEN`. The database stores only its SHA-256. A new token comes from `select public.create_export_token();` in the SQL Editor; `delete from public.export_tokens;` revokes all tokens.
+- `doGet` / `doPost` return "ElectoStock has moved", so an old copy of the page still open somewhere can't write to the sheet.
+- Deploy with `npm run deploy`: it runs the tests, then `clasp push -f`, then updates the old web-app deployment. `clasp push` replaces the whole online project. clasp may need `clasp login` again whenever Google Workspace asks you to sign in again; the error is `invalid_rapt`. Without `-f`, clasp prints "Skipping push." and exits 0, so always check what actually went live.
