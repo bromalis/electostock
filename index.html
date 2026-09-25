@@ -271,7 +271,8 @@
   .detail-bom-qty{font-family:var(--mono);font-size:12px;color:var(--text3);}
 
   /* ── Login screen ── */
-  .login-screen{position:fixed;inset:0;background:var(--bg);display:flex;z-index:1000;overflow-y:auto;padding:max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));}
+  .login-screen{position:fixed;inset:0;background:var(--bg);display:flex;z-index:1000;overflow-y:auto;
+    padding:max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));}
   .login-screen.hidden{display:none;}
   .login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:36px 40px;width:360px;max-width:100%;margin:auto;display:flex;flex-direction:column;gap:20px;}
   .login-brand-logo{display:block;width:200px;max-width:100%;height:auto;margin-bottom:14px;}
@@ -310,13 +311,13 @@
   .scanner{position:fixed;inset:0;background:#000;z-index:400;display:none;flex-direction:column;color:#fff;}
   .scanner.open{display:flex;}
   .scanner video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-  .scanner-top{position:relative;display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top)) 14px 12px;background:linear-gradient(rgba(0,0,0,.65),transparent);}
+  .scanner-top{position:relative;display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) 12px max(14px, env(safe-area-inset-left));background:linear-gradient(rgba(0,0,0,.65),transparent);}
   .scanner-title{flex:1;font-size:15px;font-weight:600;}
   .scanner-btn{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:22px;padding:8px 14px;font-size:14px;font-family:var(--sans);cursor:pointer;}
   .scanner-btn.on{background:#fff;color:#000;}
   .scanner-frame{position:relative;flex:1;display:flex;align-items:center;justify-content:center;pointer-events:none;}
   .scanner-window{width:min(78vw,340px);height:min(52vw,230px);border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);}
-  .scanner-bottom{position:relative;padding:14px 16px calc(16px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.75));display:flex;flex-direction:column;gap:10px;}
+  .scanner-bottom{position:relative;padding:14px max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));background:linear-gradient(transparent,rgba(0,0,0,.75));display:flex;flex-direction:column;gap:10px;}
   .scanner-hint{font-size:13px;text-align:center;color:rgba(255,255,255,.85);}
   .scanner-hint.err{color:#fca5a5;}
   .scanner-manual{display:flex;gap:8px;}
@@ -382,7 +383,9 @@
   .install-tip span{flex:1;}
   button{touch-action:manipulation;}
   /* The table gives up its least important columns as the space for it shrinks
-     (a narrow window, or the detail panel open), and turns into cards when narrow */
+     (a narrow window, or the detail panel open). It turns into cards when the
+     list is narrow or on any phone, portrait or landscape: body.list-cards,
+     set by onListResize(). */
   .main{container-type:inline-size;container-name:main;}
   /* Long part numbers and locations wrap, so the name keeps room */
   #inv-table td.c-name{min-width:170px;}
@@ -399,21 +402,19 @@
     #inv-table td,#inv-table thead th{padding-left:8px;padding-right:8px;}
     #inv-table td.c-part{max-width:140px;}
   }
-  @container main (max-width:640px){
-    .table-wrap{padding-left:12px;padding-right:12px;}
-    #inv-table,#inv-table tbody{display:block;}
-    #inv-table thead{display:none;}
-    #inv-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name stock" "part loc";gap:4px 12px;
-      padding:10px 12px;margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);}
-    #inv-table tr.selected{border-color:var(--accent2);background:var(--accent-dim);}
-    #inv-table td{display:none;padding:0;}
-    #inv-table td.c-name{display:block;grid-area:name;min-width:0;overflow-wrap:anywhere;}
-    #inv-table td.c-stock{display:block;grid-area:stock;justify-self:end;}
-    #inv-table td.c-part{display:block;grid-area:part;min-width:0;overflow-wrap:anywhere;}
-    #inv-table td.c-loc{display:block;grid-area:loc;justify-self:end;align-self:start;max-width:36cqw;text-align:right;}
-    #inv-table .location-pill{white-space:normal;overflow-wrap:anywhere;display:inline-block;}
-    #inv-table .stock-bar{width:40px;display:block;}
-  }
+  @container main (max-width:640px){ .table-wrap{padding-left:12px;padding-right:12px;} }
+  body.list-cards #inv-table,body.list-cards #inv-table tbody{display:block;}
+  body.list-cards #inv-table thead{display:none;}
+  body.list-cards #inv-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name stock" "part loc";gap:4px 12px;
+    padding:10px 12px;margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);}
+  body.list-cards #inv-table tr.selected{border-color:var(--accent2);background:var(--accent-dim);}
+  body.list-cards #inv-table td{display:none;padding:0;}
+  body.list-cards #inv-table td.c-name{display:block;grid-area:name;min-width:0;overflow-wrap:anywhere;}
+  body.list-cards #inv-table td.c-stock{display:block;grid-area:stock;justify-self:end;}
+  body.list-cards #inv-table td.c-part{display:block;grid-area:part;min-width:0;max-width:none;overflow-wrap:anywhere;}
+  body.list-cards #inv-table td.c-loc{display:block;grid-area:loc;justify-self:end;align-self:start;max-width:36cqw;text-align:right;}
+  body.list-cards #inv-table .location-pill{white-space:normal;overflow-wrap:anywhere;display:inline-block;max-width:none;}
+  body.list-cards #inv-table .stock-bar{width:40px;display:block;}
   @supports (height:100dvh){
     body,.shell,.sidebar,.main,.detail-panel{height:100dvh;}
     .modal{max-height:calc(100dvh - 32px);}
@@ -421,23 +422,28 @@
   /* Touch screens have no hover, so row buttons are always visible */
   @media (hover:none){ .action-btns{opacity:1;} }
 
-  /* ── Phones and small tablets ── */
-  @media (max-width:820px){
+  /* ── Phones (portrait and landscape) and small tablets ──
+     The only copy of this query: the script reads --phone-layout (isPhoneLayout). */
+  :root{--phone-layout:0;}
+  @media (max-width:820px), (max-height:500px) and (max-width:1000px) and (pointer:coarse){
+    /* Side gutters clear the notch, which is at the side in landscape */
+    :root{--phone-layout:1;--gutter-l:max(12px, env(safe-area-inset-left));--gutter-r:max(12px, env(safe-area-inset-right));}
     input,select,textarea,.search-input{font-size:16px;}  /* smaller text makes iOS zoom in on focus */
     .menu-btn{display:inline-flex;align-self:stretch;align-items:center;}
     .scan-fab{display:inline-flex;}
     .scan-btn-top{display:none;}
-    .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:60;width:min(280px,85vw);transform:translateX(-100%);transition:transform .2s;
-      padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
+    .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:60;width:calc(min(280px,85vw) + env(safe-area-inset-left));transform:translateX(-100%);transition:transform .2s;
+      padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);padding-left:env(safe-area-inset-left);}
     body.nav-open .sidebar{transform:none;box-shadow:var(--shadow);}
     body.nav-open .nav-backdrop{display:block;position:fixed;inset:0;background:var(--overlay);z-index:59;}
     .nav-item{padding:10px 10px;font-size:14px;}
     /* Header: menu, search and add on one line; views and sorting in a row that scrolls sideways */
-    .topbar{padding:calc(10px + env(safe-area-inset-top)) 12px 8px;gap:8px;flex-wrap:wrap;}
+    .topbar{padding:calc(10px + env(safe-area-inset-top)) var(--gutter-r) 8px var(--gutter-l);gap:8px;flex-wrap:wrap;}
     .search-wrap{min-width:0;max-width:none;flex:1 1 0;}
     .add-btn{padding:0 14px;font-size:20px;align-self:stretch;}
     .add-btn .btn-text{display:none;}
-    .topbar-tools{order:5;width:calc(100% + 24px);margin:0 -12px !important;padding:2px 12px;overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain;}
+    .topbar-tools{order:5;width:calc(100% + var(--gutter-l) + var(--gutter-r));margin:0 calc(0px - var(--gutter-r)) 0 calc(0px - var(--gutter-l)) !important;
+      padding:2px var(--gutter-r) 2px var(--gutter-l);overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain;}
     .topbar-tools::-webkit-scrollbar{display:none;}
     /* fades at the right edge, so it's clear the row scrolls */
     .topbar-tools{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);}
@@ -446,14 +452,17 @@
     .topbar-tools label{flex-shrink:0;}
     .view-chips{display:flex;}
     .stats-bar,.alerts-panel{display:none !important;}   /* the chips carry the counts */
-    .table-wrap{padding:10px 12px calc(90px + env(safe-area-inset-bottom));overscroll-behavior:contain;}
-    .detail-panel,.detail-panel.closed{position:fixed;inset:0;width:100%;z-index:55;border-left:none;padding-top:env(safe-area-inset-top);transition:transform .2s;}
+    .table-wrap{padding:10px var(--gutter-r) calc(90px + env(safe-area-inset-bottom)) var(--gutter-l);overscroll-behavior:contain;}
+    .install-tip{margin:10px var(--gutter-r) 0 var(--gutter-l);}
+    .detail-panel,.detail-panel.closed{position:fixed;inset:0;width:100%;z-index:55;border-left:none;transition:transform .2s;
+      padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);}
     .detail-panel.closed{transform:translateX(100%);}
     .detail-close{width:44px;height:44px;margin:-10px -10px 0 0;font-size:20px;}
     .detail-actions{padding-bottom:calc(12px + env(safe-area-inset-bottom));}
     .detail-actions .btn{padding:10px 12px;font-size:13px;}
     .modal-overlay{align-items:flex-end;}
-    .modal,.modal-sm,.modal-md,.modal-bom{width:100%;max-width:100%;max-height:calc(100vh - 40px);border-radius:14px 14px 0 0;}
+    .modal,.modal-sm,.modal-md,.modal-bom{width:100%;max-width:100%;max-height:calc(100vh - 40px);border-radius:14px 14px 0 0;
+      padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);}
     .modal-bom{overflow:auto;}
     .modal-bom .modal-body{max-height:none;overflow:visible;}
     .modal-footer{flex-wrap:wrap;padding-bottom:calc(14px + env(safe-area-inset-bottom));position:sticky;bottom:0;background:var(--bg2);z-index:2;}
@@ -462,19 +471,23 @@
     .modal .form-row.form-row-stack{grid-template-columns:1fr !important;}
     .btn-sm{padding:7px 12px;}
     .btn-xs{padding:5px 10px;font-size:12px;}
-    .log-toolbar{padding:10px 12px;}
+    .log-toolbar{padding:10px var(--gutter-r) 10px var(--gutter-l);}
     .log-toolbar input{max-width:none;flex-basis:100%;}
-    .log-list{padding:12px 12px calc(90px + env(safe-area-inset-bottom));}
+    .log-list{padding:12px var(--gutter-r) calc(90px + env(safe-area-inset-bottom)) var(--gutter-l);}
     .hist-event-header{flex-wrap:wrap;gap:6px 10px;}
     .hist-asm{white-space:normal;flex-basis:100%;order:3;}
     .user-row{flex-wrap:wrap;}
     .user-name{flex-basis:100%;}
-    .update-toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));text-align:center;}
+    .update-toast{left:var(--gutter-l);right:var(--gutter-r);bottom:calc(84px + env(safe-area-inset-bottom));text-align:center;}
     .login-card{padding:28px 22px;}
-  }
-  @supports (height:100dvh){
-    @media (max-width:820px){
+    @supports (height:100dvh){
       .modal,.modal-sm,.modal-md,.modal-bom{max-height:calc(100dvh - env(safe-area-inset-top) - 16px);}
+    }
+    /* Wider phone-layout screens (landscape phones, small tablets): dialogs keep
+       a readable width, centred. Clear of the screen edges, they need no room
+       for the notch. */
+    @media (min-width:640px){
+      .modal,.modal-sm,.modal-md,.modal-bom{max-width:600px;padding-left:0;padding-right:0;}
     }
   }
   /* Narrow phones: the BOM editor drops its line-cost column (the total stays),
@@ -488,7 +501,7 @@
     .bom-picker-cat{width:100%;}
     .bom-picker-list{max-height:50vh;}
   }
-  /* Landscape phones: keep the scan frame inside the camera view */
+  /* Short screens (landscape phones): keep the scan frame inside the camera view */
   @media (max-height:500px){
     .scanner-window{height:min(52vw,230px,38vh);}
   }
@@ -3024,14 +3037,30 @@ function openNav()  { document.body.classList.add('nav-open'); }
 function closeNav() { document.body.classList.remove('nav-open'); }
 document.querySelector('.sidebar').addEventListener('click', e => { if (e.target.closest('.nav-item')) closeNav(); });
 
-const phoneQuery = matchMedia('(max-width:820px)');
+// Whether the phone layout is on. The CSS media query decides (it sets --phone-layout),
+// so the breakpoint lives in one place.
+function isPhoneLayout() {
+  return getComputedStyle(document.documentElement).getPropertyValue('--phone-layout').trim() === '1';
+}
+
+// Runs whenever the list changes size: when it's first shown, when the detail panel
+// opens or closes, and when the phone layout switches on or off (the sidebar joining
+// or leaving the row always changes the list's width).
+let wasPhoneLayout = null;
+function onListResize(entries) {
+  const width = entries[0].contentRect.width;
+  if (!width) return;                                   // hidden (signed out)
+  const phone = isPhoneLayout();
+  // Cards instead of the table on any phone, or when the list itself is narrow
+  document.body.classList.toggle('list-cards', phone || width <= 640);
+  if (phone !== wasPhoneLayout) { wasPhoneLayout = phone; fitPlaceholders(); showInstallTip(); }
+}
+new ResizeObserver(onListResize).observe(document.querySelector('.main'));
 
 // Placeholders short enough for the field at each size
 function fitPlaceholders() {
-  document.getElementById('search').placeholder = phoneQuery.matches ? 'Search items' : 'Search by name, part #, location…';
+  document.getElementById('search').placeholder = isPhoneLayout() ? 'Search items' : 'Search by name, part #, location…';
 }
-phoneQuery.addEventListener('change', () => { fitPlaceholders(); showInstallTip(); });
-fitPlaceholders();
 
 // Phones: suggest installing the app until it's installed or the tip is dismissed.
 // Android's Chrome offers an install prompt; Safari on iPhone needs Share > Add to Home Screen.
@@ -3049,7 +3078,7 @@ function showInstallTip() {
   try { dismissed = localStorage.getItem('electostock_install_tip') === 'dismissed'; } catch (e) {}
   const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const close = '<button class="close-btn" onclick="dismissInstallTip()" aria-label="Dismiss">✕</button>';
-  if (dismissed || isInstalled() || !phoneQuery.matches || !sessionToken || !(installPrompt || iOS)) { tip.style.display = 'none'; return; }
+  if (dismissed || isInstalled() || !isPhoneLayout() || !sessionToken || !(installPrompt || iOS)) { tip.style.display = 'none'; return; }
   tip.innerHTML = installPrompt
     ? `<span>Install ElectoStock as an app on this phone.</span><button class="btn btn-primary btn-sm" onclick="installApp()">Install</button>${close}`
     : `<span>Install as an app: tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>${close}`;
