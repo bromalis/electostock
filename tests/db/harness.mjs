@@ -18,7 +18,8 @@ const SUPABASE_STUB = `
   create table auth.users (
     id uuid primary key default gen_random_uuid(),
     email text not null,
-    last_sign_in_at timestamptz
+    last_sign_in_at timestamptz,
+    raw_user_meta_data jsonb not null default '{}'
   );
   -- Supabase's auth.uid() reads the JWT subject the API sets per request
   create function auth.uid() returns uuid language sql stable as $$

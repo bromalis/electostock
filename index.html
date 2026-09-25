@@ -619,6 +619,8 @@
           <option value="qty">Sort: Quantity</option>
           <option value="supplier_part">Sort: Part #</option>
           <option value="category">Sort: Category</option>
+          <option value="unit_cost">Sort: Unit Cost</option>
+          <option value="supplier">Sort: Supplier</option>
         </select>
       </div>
       <button class="btn btn-primary needs-user add-btn" onclick="openModal()" aria-label="Add item">＋<span class="btn-text"> Add Item</span></button>
@@ -1124,9 +1126,11 @@ const ACTIONS = {
     changed(ok(await sb.from('items').delete().eq('id', id).select('id')), 'Item');
     return { cost_updates: [] };
   },
-  // Logged in stock_moves with the note, the user and the actual change
+  // Logged in stock_moves with the note, the user and the actual change. Returns the
+  // quantities as the database saw them, which can differ from this page's copy.
   async adjustQty({ id, action, qty, note = '' }) {
-    return { newQty: num(ok(await sb.rpc('adjust_stock', { p_id: id, p_action: action, p_qty: qty, p_note: note }))) };
+    const r = ok(await sb.rpc('move_stock', { p_id: id, p_action: action, p_qty: qty, p_note: note }));
+    return { newQty: num(r.qty_after), before: num(r.qty_before), change: num(r.qty_change) };
   },
   async getStockMoves({ limit = 300 } = {}) {
     const rows = ok(await sb.from('stock_moves').select('*')
@@ -1307,6 +1311,7 @@ function showToast(msg) {
 }
 
 async function syncAll(silent = false) {
+  if (!sessionUserId) return;   // signed out
   if (isSyncing) { resyncPending = true; return; }
   isSyncing = true;
   if (!silent) {
@@ -1318,16 +1323,28 @@ async function syncAll(silent = false) {
   }
   try {
     const r = await api('getAll+getCats');
+    if (!sessionUserId) return;   // signed out while loading
+    // No profile any more: the account was removed. Row-level security would only
+    // show an empty inventory, so sign out instead.
+    if (!r.role) {
+      await sb.auth.signOut({ scope: 'local' });
+      showLogin('This account no longer has access. Ask an admin if that is a mistake.');
+      return;
+    }
     inventory          = r.items      || [];
     categories         = r.categories || [];
     boms               = r.boms       || [];
     // Role changes apply at once in the database; keep the buttons in step
-    if (r.role && r.role !== sessionRole) { sessionRole = r.role; document.body.dataset.role = sessionRole; }
+    if (r.role !== sessionRole) { sessionRole = r.role; document.body.dataset.role = sessionRole; }
     setSyncStatus('ok', 'Synced ' + new Date().toLocaleTimeString());
     render();
-    if (!silent) {
-      document.getElementById('loading-overlay').style.display = 'none';
-      document.getElementById('inv-table').style.display = 'table';
+    // Also after a silent sync: it may be the first to succeed after a failed load
+    document.getElementById('loading-overlay').style.display = 'none';
+    document.getElementById('inv-table').style.display = 'table';
+    // The open item may have been deleted by someone else
+    if (selectedId && !inventory.some(i => i.id === selectedId)) {
+      selectedId = null;
+      document.getElementById('detail-panel').classList.add('closed');
     }
     if (selectedId) renderDetail(selectedId);
     openPendingItem();  // a label link the page was opened with
@@ -1342,7 +1359,7 @@ async function syncAll(silent = false) {
         <div style="text-align:center;color:var(--danger)">
           <div style="font-size:24px;margin-bottom:8px">⊗</div>
           <div style="font-weight:500;margin-bottom:4px">Could not load the inventory</div>
-          <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${err.message}</div>
+          <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${escapeHtml(err.message)}</div>
           <button class="btn btn-ghost btn-sm" onclick="manualSync()">Retry</button>
         </div>`;
     }
@@ -1371,8 +1388,14 @@ function startLiveUpdates() {
   liveChannel = sb.channel('inventory-changes');
   ['items', 'bom_lines', 'categories'].forEach(table =>
     liveChannel.on('postgres_changes', { event: '*', schema: 'public', table }, scheduleResync));
+  let joinedBefore = false;
   liveChannel.subscribe(status => {
-    if (status === 'SUBSCRIBED') setSyncStatus('ok', 'Live · ' + new Date().toLocaleTimeString());
+    if (status === 'SUBSCRIBED') {
+      setSyncStatus('ok', 'Live · ' + new Date().toLocaleTimeString());
+      // Rejoined after an outage: catch up on changes made while it was down
+      if (joinedBefore) scheduleResync();
+      joinedBefore = true;
+    }
     else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') setSyncStatus('error', 'Live updates paused');
   });
 }
@@ -1399,17 +1422,28 @@ function fmtMoney(v, digits) {
   return (v < 0 ? '−$' : '$') + Math.abs(v).toFixed(digits);
 }
 
-function catColor(name) {
-  const c = categories.find(x => x.name === name);
-  return c ? c.color : '#78716c';
+// Stored values are shown with escapeHtml() wherever they go into HTML: any user
+// can edit item names, notes, categories and job names, and those are seen by admins.
+
+// A category colour as a CSS value: only #rgb … #rrggbbaa, so a stored value can't
+// inject styles or break out of the style attribute.
+function safeColor(color) {
+  return /^#[0-9a-f]{3,8}$/i.test(color || '') ? color : '#78716c';
 }
 
+function catColor(name) {
+  const c = categories.find(x => x.name === name);
+  return safeColor(c && c.color);
+}
+
+// Notes as HTML: the text escaped, and http(s) links made clickable
 function linkifyNotes(text) {
   if (!text) return '';
-  return text.replace(/(https?:\/\/[^\s,;)<>"]+)/g, url => {
-    const d = url.length > 40 ? url.substring(0,38)+'…' : url;
-    return `<a href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${d}</a>`;
-  });
+  return String(text).split(/(https?:\/\/[^\s,;)<>"']+)/g).map((part, i) => {
+    if (i % 2 === 0) return escapeHtml(part);
+    const shown = part.length > 40 ? part.substring(0, 38) + '…' : part;
+    return `<a href="${escapeHtml(part)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(shown)}</a>`;
+  }).join('');
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1424,7 +1458,7 @@ function renderBomFilterSelect() {
   const assemblies = inventory.filter(i => hasBom(i.id))
     .sort((a, b) => a.name.localeCompare(b.name));
   sel.innerHTML = '<option value="">All Items</option>'
-    + assemblies.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
+    + assemblies.map(i => `<option value="${i.id}">${escapeHtml(i.name)}</option>`).join('');
   if (prev && assemblies.find(i => String(i.id) === String(prev))) sel.value = prev;
 }
 
@@ -1469,7 +1503,7 @@ function getFiltered() {
 
   return inventory
     .filter(i => {
-      if (currentView === 'low')     return i.min > 0 && i.qty <= i.min;
+      if (currentView === 'low')     return i.min > 0 && i.qty < i.min;
       if (currentView === 'bom')     return hasBom(i.id);
       if (currentView === 'nobom')   return !hasBom(i.id);
       if (LOG_VIEWS.includes(currentView)) return false;
@@ -1520,9 +1554,9 @@ function renderAlerts() {
   const p = document.getElementById('alerts-panel');
   let h='';
   inventory.filter(i=>i.qty===0&&i.min>0).slice(0,2)
-    .forEach(i=>h+=`<div class="alert-row"><span>⊗</span><span><b>${i.name}</b> — out of stock (${i.location||'no location'})</span></div>`);
+    .forEach(i=>h+=`<div class="alert-row"><span>⊗</span><span><b>${escapeHtml(i.name)}</b> — out of stock (${escapeHtml(i.location||'no location')})</span></div>`);
   inventory.filter(i=>i.min>0&&i.qty>0&&i.qty<i.min).slice(0,3)
-    .forEach(i=>h+=`<div class="alert-row alert-warn"><span>⚠</span><span><b>${i.name}</b> — ${i.qty} left (min: ${i.min})</span></div>`);
+    .forEach(i=>h+=`<div class="alert-row alert-warn"><span>⚠</span><span><b>${escapeHtml(i.name)}</b> — ${i.qty} left (min: ${i.min})</span></div>`);
   p.innerHTML=h; p.style.display=h?'block':'none';
 }
 
@@ -1535,7 +1569,7 @@ function renderCatTags() {
   all.forEach(cat=>{
     const btn=document.createElement('button');
     btn.className='cat-tag'+(activeCats.has(cat)?' active':'');
-    btn.innerHTML=`<span class="cat-dot" style="background:${catColor(cat)}"></span>${cat}`;
+    btn.innerHTML=`<span class="cat-dot" style="background:${catColor(cat)}"></span>${escapeHtml(cat)}`;
     btn.onclick=()=>toggleCategory(cat);
     container.appendChild(btn);
   });
@@ -1551,7 +1585,7 @@ function toggleCategory(cat) {
 const VIEW_CHIPS = [['all', 'All'], ['low', 'Low stock'], ['bom', 'Has BOM'], ['nobom', 'No BOM']];
 
 function renderViewChips() {
-  const low = inventory.filter(i => i.min > 0 && i.qty <= i.min).length;
+  const low = inventory.filter(i => i.min > 0 && i.qty < i.min).length;
   const counts = { all: inventory.length, low };
   // Category filters first, so it's visible that one is on
   document.getElementById('view-chips').innerHTML =
@@ -1569,7 +1603,7 @@ function setViewByName(v) {
 function renderCatSelect() {
   const sel=document.getElementById('f-cat');
   const prev=sel.value;
-  sel.innerHTML=categories.map(c=>`<option value="${c.name}">${c.name}</option>`).join('');
+  sel.innerHTML=categories.map(c=>`<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('');
   if(prev&&categories.find(c=>c.name===prev))sel.value=prev;
 }
 
@@ -1588,19 +1622,19 @@ function renderTable() {
       ?`<div class="notes-cell">${linkifyNotes(item.notes)}</div>`
       :'<span style="color:var(--text3)">—</span>';
     return `<tr onclick="selectRow(${item.id})" data-id="${item.id}" class="${selectedId===item.id?'selected':''}">
-      <td class="mono c-part">${item.supplier_part||item.part||'—'}</td>
-      <td class="c-name" style="font-weight:500">${item.name}${bomBadge}</td>
-      <td class="c-cat"><span class="badge badge-cat"><span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>${item.category}</span></td>
+      <td class="mono c-part">${escapeHtml(item.supplier_part||item.part||'—')}</td>
+      <td class="c-name" style="font-weight:500">${escapeHtml(item.name)}${bomBadge}</td>
+      <td class="c-cat"><span class="badge badge-cat"><span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>${escapeHtml(item.category)}</span></td>
       <td class="c-stock"><div class="stock-bar-wrap">
         <span class="qty ${qc}">${Number(item.qty).toLocaleString()}</span>
         <div class="stock-bar"><div class="stock-fill" style="width:${pct}%;background:${fill}"></div></div>
       </div></td>
-      <td class="c-loc"><span class="location-pill">${item.location||'—'}</span></td>
+      <td class="c-loc"><span class="location-pill">${escapeHtml(item.location||'—')}</span></td>
       <td class="mono c-cost">${hasBom(item.id)
         ? `<span style="color:var(--accent)" title="Calculated from BOM">${fmtMoney(calcBomCost(item.id),3)}</span>`
         : `${fmtMoney(Number(item.unit_cost||0),3)}`
       }</td>
-      <td class="c-supplier" style="color:var(--text2)">${item.supplier||'—'}</td>
+      <td class="c-supplier" style="color:var(--text2)">${escapeHtml(item.supplier||'—')}</td>
       <td class="c-notes">${notesHtml}</td>
       <td class="actions-col c-actions"><div class="action-btns">
         ${hasBom(item.id)
@@ -1648,7 +1682,7 @@ function renderDetail(id) {
       const hasNested=child&&hasBom(child.id);
       const lineCost=child?(child.unit_cost||0)*line.quantity:0;
       bomHtml+=`<div class="detail-bom-line">
-        <span>${name}${hasNested?'<span class="badge badge-bom" style="margin-left:4px">BOM</span>':''}</span>
+        <span>${escapeHtml(name)}${hasNested?'<span class="badge badge-bom" style="margin-left:4px">BOM</span>':''}</span>
         <span style="display:flex;gap:8px;align-items:baseline">
           <span class="detail-bom-qty"${line.quantity<0?' style="color:var(--warn)" title="Negative: subtracts"':''}>× ${line.quantity<0?'−'+(-line.quantity):line.quantity}</span>
           <span style="font-family:var(--mono);font-size:11px;color:var(--text3)">${fmtMoney(lineCost,4)}</span>
@@ -1659,8 +1693,8 @@ function renderDetail(id) {
 
   document.getElementById('detail-content').innerHTML=`
     <div class="detail-header"><div>
-      <div class="detail-part">${i.supplier_part||i.part||'—'}</div>
-      <div class="detail-name">${i.name}</div>
+      <div class="detail-part">${escapeHtml(i.supplier_part||i.part||'—')}</div>
+      <div class="detail-name">${escapeHtml(i.name)}</div>
     </div><button class="close-btn detail-close" onclick="selectRow(${id})" aria-label="Close">✕</button></div>
     <div class="detail-body">
       <div class="detail-section" style="display:flex;justify-content:space-between;align-items:baseline">
@@ -1670,17 +1704,17 @@ function renderDetail(id) {
       <div class="detail-row"><span class="detail-key">Min Level</span><span class="detail-val">${i.min}</span></div>
       <div class="detail-row"><span class="detail-key">Stock %</span><span class="detail-val">${pct}%</span></div>
       <div class="detail-section">Details</div>
-      <div class="detail-row"><span class="detail-key">Category</span><span class="detail-val">${i.category}</span></div>
-      <div class="detail-row"><span class="detail-key">Location</span><span class="detail-val">${i.location||'—'}</span></div>
+      <div class="detail-row"><span class="detail-key">Category</span><span class="detail-val">${escapeHtml(i.category)}</span></div>
+      <div class="detail-row"><span class="detail-key">Location</span><span class="detail-val">${escapeHtml(i.location||'—')}</span></div>
       <div class="detail-row"><span class="detail-key">Unit Cost</span><span class="detail-val">${
         hasBom(id)
           ? `<span style="color:var(--accent)" title="Calculated from BOM">${fmtMoney(calcBomCost(id),4)}</span>`
           : `${fmtMoney(Number(i.unit_cost||0),4)}`
       }</span></div>
       <div class="detail-section">Supplier</div>
-      <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${i.supplier||'—'}</span></div>
-      <div class="detail-row"><span class="detail-key">Part #</span><span class="detail-val">${i.supplier_part||'—'}</span></div>
-      ${i.part?`<div class="detail-row"><span class="detail-key">Internal Part #</span><span class="detail-val">${i.part}</span></div>`:''}
+      <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${escapeHtml(i.supplier||'—')}</span></div>
+      <div class="detail-row"><span class="detail-key">Part #</span><span class="detail-val">${escapeHtml(i.supplier_part||'—')}</span></div>
+      ${i.part?`<div class="detail-row"><span class="detail-key">Internal Part #</span><span class="detail-val">${escapeHtml(i.part)}</span></div>`:''}
       ${i.barcode?`<div class="detail-row"><span class="detail-key">Barcode</span><span class="detail-val">${escapeHtml(i.barcode)}</span></div>`:''}
       ${bomHtml}${renderWhereUsed(id)}${notesHtml}
     </div>
@@ -1709,10 +1743,10 @@ function renderWhereUsed(id) {
   }
   uses.forEach(u => {
     const per = u.perUnit === 0 ? 'cancels out' : `${u.perUnit < 0 ? '−' + (-u.perUnit) : u.perUnit} / unit`;
-    html += `<div class="detail-bom-line" style="cursor:pointer" onclick="selectRow(${u.item.id})" title="Open ${u.item.name.replace(/"/g, '&quot;')}">
+    html += `<div class="detail-bom-line" style="cursor:pointer" onclick="selectRow(${u.item.id})" title="Open ${escapeHtml(u.item.name)}">
       <span style="min-width:0">
-        <span>${u.item.name}</span>
-        ${u.direct ? '' : `<span style="display:block;font-size:11px;color:var(--text3)">via ${u.via.join(' › ')}</span>`}
+        <span>${escapeHtml(u.item.name)}</span>
+        ${u.direct ? '' : `<span style="display:block;font-size:11px;color:var(--text3)">via ${escapeHtml(u.via.join(' › '))}</span>`}
       </span>
       <span class="detail-bom-qty" style="white-space:nowrap${u.perUnit < 0 ? ';color:var(--warn)' : ''}">${per}</span>
     </div>`;
@@ -1806,9 +1840,16 @@ async function saveItem() {
   btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';
   try {
     if(editId){
-      // Send only what changed so we don't overwrite others' edits (e.g. qty)
+      // Send only what changed so we don't overwrite others' edits
       const patch={id:editId};
       Object.keys(item).forEach(k=>{ if(item[k]!==editBaseline[k]) patch[k]=item[k]; });
+      // A new quantity goes through the stock log like any other count
+      if(patch.qty!==undefined){
+        const r=await api('adjustQty',{id:editId,action:'set',qty:patch.qty,note:'Count set in the item form'});
+        const live=inventory.find(x=>x.id===editId); if(live)live.qty=r.newQty;
+        editBaseline.qty=patch.qty;   // a retry after a later error doesn't set it again
+        delete patch.qty;
+      }
       if(Object.keys(patch).length>1){
         const r=await api('update',{item:patch});
         const idx=inventory.findIndex(x=>x.id===editId);
@@ -1822,13 +1863,19 @@ async function saveItem() {
       // If this was a copy and the source had a BOM, duplicate it to the new item
       if(copySourceId){
         const srcLines = getBomLines(copySourceId);
+        copySourceId = null;
         if(srcLines.length){
           const lines = srcLines.map(l=>({child_id:l.child_id,quantity:l.quantity}));
-          const rb = await api('saveBOM',{parent_id:newItem.id,lines});
-          applyCostUpdates(rb.cost_updates);
-          boms.push(...lines.map(l=>({parent_id:newItem.id,child_id:l.child_id,quantity:l.quantity})));
+          try {
+            const rb = await api('saveBOM',{parent_id:newItem.id,lines});
+            applyCostUpdates(rb.cost_updates);
+            boms.push(...lines.map(l=>({parent_id:newItem.id,child_id:l.child_id,quantity:l.quantity})));
+          } catch(bomErr) {
+            closeModal();render();
+            alert(`"${newItem.name}" was added, but its BOM couldn't be copied: ${bomErr.message}\nOpen it and use ◈ BOM to add the components.`);
+            return;
+          }
         }
-        copySourceId = null;
       }
     }
     closeModal();render();
@@ -1845,6 +1892,7 @@ function openAdj(id,e) {
   if(e)e.stopPropagation();
   adjId=id;
   const i=inventory.find(x=>x.id===id);
+  if(!i)return;
   document.getElementById('adj-title').textContent='Adjust — '+i.name.substring(0,28);
   document.getElementById('adj-info').textContent='Current: '+Number(i.qty).toLocaleString()+' units';
   document.getElementById('adj-qty').value=1;
@@ -1857,19 +1905,20 @@ function openAdj(id,e) {
 function closeAdjModal(){document.getElementById('adj-modal').classList.remove('open');}
 
 async function applyAdjust() {
-  const qty=parseInt(document.getElementById('adj-qty').value)||0;
+  const raw=document.getElementById('adj-qty').value.trim();
+  const qty=Number(raw);
   const action=document.getElementById('adj-action').value;
+  if(raw===''||!Number.isInteger(qty)||qty<0||(action!=='set'&&qty===0)){
+    document.getElementById('adj-err').textContent=action==='set'?'Enter the new count (a whole number, 0 or more).':'Enter a whole number greater than 0.';
+    return;
+  }
   const note=document.getElementById('adj-note').value.trim();
   const btn=document.getElementById('adj-save');
   btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';
   try {
     const r=await api('adjustQty',{id:adjId,action,qty,note});
     const idx=inventory.findIndex(x=>x.id===adjId);
-    if(idx>=0){
-      const c=inventory[idx].qty;
-      inventory[idx].qty=action==='add'?c+qty:action==='remove'?Math.max(0,c-qty):qty;
-      if(r.newQty!==undefined)inventory[idx].qty=r.newQty;
-    }
+    if(idx>=0)inventory[idx].qty=r.newQty;
     closeAdjModal();render();
     if(selectedId===adjId)renderDetail(adjId);
     setSyncStatus('ok','Saved '+new Date().toLocaleTimeString());
@@ -1881,8 +1930,9 @@ async function applyAdjust() {
 //  BOM Editor Modal
 // ══════════════════════════════════════════════════════════
 function openBomEditor(id) {
-  bomEditId=id;
   const item=inventory.find(x=>x.id===id);
+  if(!item)return;
+  bomEditId=id;
   document.getElementById('bom-modal-title').textContent='BOM — '+item.name;
   document.getElementById('bom-modal-sub').textContent='Components consumed per unit checked out. A negative quantity subtracts: use it to cancel parts added by a sub-assembly, or to return parts to stock.';
   document.getElementById('bom-modal-err').textContent='';
@@ -1911,7 +1961,7 @@ function renderBomLines() {
       <div class="bom-picker-wrap" id="picker-wrap-${idx}">
         <button class="bom-picker-display${child ? ' selected-val' : ''}" id="picker-btn-${idx}"
           onclick="toggleBomPicker(${idx},event)">
-          <span style="min-width:0;overflow-wrap:anywhere">${displayName}</span>
+          <span style="min-width:0;overflow-wrap:anywhere">${escapeHtml(displayName)}</span>
           <span style="flex-shrink:0;color:var(--text3);font-size:10px">▾</span>
         </button>
         <div class="bom-picker-dropdown" id="picker-drop-${idx}" style="display:none">
@@ -1922,7 +1972,7 @@ function renderBomLines() {
               onchange="filterBomPicker(${idx})" onclick="event.stopPropagation()">
               <option value="">All categories</option>
               ${[...new Set(inventory.filter(i=>i.id!==bomEditId).map(i=>i.category))].sort()
-                .map(c=>`<option value="${c}">${c}</option>`).join('')}
+                .map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
             </select>
           </div>
           <div class="bom-picker-list" id="picker-list-${idx}"></div>
@@ -2001,7 +2051,7 @@ function filterBomPicker(idx) {
     return `<div class="bom-picker-opt${isActive ? ' active' : ''}"
       onclick="selectBomPickerItem(${idx},${item.id},event)">
       ${catDot}
-      <span style="flex:1;min-width:0;overflow-wrap:anywhere">${item.name}${item.supplier_part ? ' <span style="color:var(--text3)">(' + item.supplier_part + ')</span>' : ''}</span>
+      <span style="flex:1;min-width:0;overflow-wrap:anywhere">${escapeHtml(item.name)}${item.supplier_part ? ' <span style="color:var(--text3)">(' + escapeHtml(item.supplier_part) + ')</span>' : ''}</span>
       ${costLabel}
     </div>`;
   }).join('');
@@ -2141,6 +2191,7 @@ async function saveBom() {
 function openBomCheckout(id,e) {
   if(e)e.stopPropagation();
   const item=inventory.find(x=>x.id===id);
+  if(!item)return;
 
   document.getElementById('bom-co-sub').textContent      = item.name;
   document.getElementById('bom-co-err').textContent      = '';
@@ -2195,7 +2246,7 @@ function refreshBomCheckoutPreview(parentId) {
       if (hasBom(child.id)) {
         html += `<div class="bom-co-assembly" style="margin-left:${indent}px">
           <span class="bom-co-assembly-icon">◈</span>
-          <span style="flex:1">${child.name}</span>
+          <span style="flex:1">${escapeHtml(child.name)}</span>
           <span style="font-family:var(--mono);font-size:12px;color:${qty < 0 ? 'var(--warn)' : 'var(--text3)'}">×${qty < 0 ? '−' + (-qty) : qty}</span>
         </div>`;
         html += renderTreeLevel(child.id, qty, depth + 1);
@@ -2209,8 +2260,8 @@ function refreshBomCheckoutPreview(parentId) {
           ? `<span class="bom-co-stock" title="Positive and negative lines cancel out">${child.qty} · cancels</span>`
           : `<span class="bom-co-stock ${stockClass}"${net !== qty ? ` title="Net across the whole BOM: ${signed(net)}"` : ''}>${child.qty}→${Math.max(0, after)}${net !== qty ? ` <span style="color:var(--text3)">(net ${signed(net)})</span>` : ''}</span>`;
         html += `<div class="bom-checkout-row ${insufficient ? 'insufficient' : ''}" style="margin-left:${indent}px">
-          <span class="bom-co-name">${child.name}
-            ${child.supplier_part ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:4px">${child.supplier_part}</span>` : ''}
+          <span class="bom-co-name">${escapeHtml(child.name)}
+            ${child.supplier_part ? `<span style="font-family:var(--mono);font-size:11px;color:var(--text3);margin-left:4px">${escapeHtml(child.supplier_part)}</span>` : ''}
           </span>
           <span class="bom-co-qty"${qty < 0 ? ' style="color:var(--accent)"' : ''}>${signed(qty)}</span>
           ${stock}
@@ -2224,7 +2275,7 @@ function refreshBomCheckoutPreview(parentId) {
   const returned = merged.filter(m => m.qty < 0);
   const returnsNote = returned.length
     ? `<div style="font-size:12px;color:var(--text2);padding:8px 2px 0">↩ ${returned.length} component${returned.length !== 1 ? 's' : ''} will be returned to stock: ${
-        returned.map(m => `${m.item.name} +${-m.qty}`).join(', ')}</div>`
+        returned.map(m => `${escapeHtml(m.item.name)} +${-m.qty}`).join(', ')}</div>`
     : '';
   list.innerHTML = (treeHtml + returnsNote) || '<div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">No components in BOM</div>';
 
@@ -2247,6 +2298,10 @@ function closeBomCheckout(){
 
 async function confirmBomCheckout(printAfter=false) {
   if(!bomCoData||!bomCoData.merged.length)return;
+  // The quantity field could change while the request runs; use what was confirmed
+  const snapshotData = { ...bomCoData };
+  const qtyInput = document.getElementById('bom-co-qty-input');
+  qtyInput.disabled = true;
   const confirmBtn = document.getElementById('bom-co-confirm');
   const printBtn   = document.getElementById('bom-co-print');
   confirmBtn.disabled=true; confirmBtn.innerHTML='<div class="spinner"></div>';
@@ -2265,8 +2320,8 @@ async function confirmBomCheckout(printAfter=false) {
     // The database re-resolves the BOM, applies the leaf components' net changes
     // and writes the checkout log in one locked request.
     const r = await api('checkout', {
-      assembly_id: bomCoData.parentId,
-      qty_built:   bomCoData.checkoutQty,
+      assembly_id: snapshotData.parentId,
+      qty_built:   snapshotData.checkoutQty,
       job_name:    jobName,
     });
 
@@ -2274,7 +2329,6 @@ async function confirmBomCheckout(printAfter=false) {
       const idx = inventory.findIndex(x => x.id === id);
       if (idx >= 0) inventory[idx].qty = newQty;
     });
-    const snapshotData = { ...bomCoData };
     closeBomCheckout();
     render();
     if (selectedId) renderDetail(selectedId);
@@ -2288,6 +2342,7 @@ async function confirmBomCheckout(printAfter=false) {
     if (printWindow) printWindow.close();
   }
   finally {
+    qtyInput.disabled   = false;
     confirmBtn.disabled = false;
     printBtn.disabled   = false;
     const hasJob = document.getElementById('bom-co-jobname')?.value.trim().length > 0
@@ -2318,7 +2373,7 @@ function closeCatModal() {
 
 function renderColorPresets() {
   document.getElementById('color-presets').innerHTML=COLOR_PALETTE.map(c=>
-    `<div class="color-preset${c===newCatColor?' selected':''}" style="background:${c}" onclick="selectNewColor('${c}')"></div>`
+    `<div class="color-preset${c===newCatColor?' selected':''}" style="background:${c}" onclick="selectNewColor(COLOR_PALETTE[${COLOR_PALETTE.indexOf(c)}])"></div>`
   ).join('');
 }
 
@@ -2329,19 +2384,19 @@ function renderCatList() {
   if(!categories.length){list.innerHTML='<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px 0">No categories yet</div>';return;}
   list.innerHTML=categories.map((cat,idx)=>{
     const count=inventory.filter(i=>i.category===cat.name).length;
-    return `<div class="cat-list-item" id="cat-row-${idx}">
+    return `<div class="cat-list-item" id="cat-row-${idx}" data-cat="${escapeHtml(cat.name)}">
       <div style="position:relative">
-        <div class="cat-swatch-btn" id="swatch-${idx}" style="background:${cat.color}"
-          onclick="toggleColorPopover(${idx},'${cat.name.replace(/'/g,"\\'")}',event)" title="Change color"></div>
+        <div class="cat-swatch-btn" id="swatch-${idx}" style="background:${safeColor(cat.color)}"
+          onclick="toggleColorPopover(${idx},event)" title="Change color"></div>
         <div class="color-popover" id="popover-${idx}">
-          ${COLOR_PALETTE.map(c=>`<div class="color-preset${c===cat.color?' selected':''}" style="background:${c}"
-            onclick="applyCatColor(${idx},'${cat.name.replace(/'/g,"\\'")}','${c}',event)"></div>`).join('')}
+          ${COLOR_PALETTE.map((c,ci)=>`<div class="color-preset${c===cat.color?' selected':''}" style="background:${c}"
+            onclick="applyCatColor(this,${ci},event)"></div>`).join('')}
         </div>
       </div>
-      <span class="cat-name-text" title="${cat.name}">${cat.name}</span>
+      <span class="cat-name-text" title="${escapeHtml(cat.name)}">${escapeHtml(cat.name)}</span>
       <span class="cat-count">${count}</span>
       <button class="btn btn-danger btn-xs needs-admin" id="del-cat-${idx}"
-        onclick="removeCategory(${idx},'${cat.name.replace(/'/g,"\\'")}',event)">Remove</button>
+        onclick="removeCategory(this,event)">Remove</button>
     </div>`;
   }).join('');
 }
@@ -2349,7 +2404,7 @@ function renderCatList() {
 function closeAnyPopover() {
   if(openPopover!==null){const el=document.getElementById('popover-'+openPopover);if(el)el.classList.remove('open');openPopover=null;}
 }
-function toggleColorPopover(idx,name,e) {
+function toggleColorPopover(idx,e) {
   e.stopPropagation();
   if(openPopover===idx){closeAnyPopover();return;}
   closeAnyPopover();
@@ -2358,9 +2413,17 @@ function toggleColorPopover(idx,name,e) {
 }
 document.addEventListener('click',()=>closeAnyPopover());
 
-async function applyCatColor(idx,name,color,e) {
+// The category whose row a button in the category dialog is in
+function catOfRow(el) {
+  const row = el.closest('.cat-list-item');
+  return row ? row.dataset.cat : undefined;
+}
+
+async function applyCatColor(el,colorIdx,e) {
   e.stopPropagation();closeAnyPopover();
-  const swatch=document.getElementById('swatch-'+idx);
+  const name=catOfRow(el), color=COLOR_PALETTE[colorIdx];
+  if(name===undefined||!color)return;
+  const swatch=el.closest('.cat-list-item').querySelector('.cat-swatch-btn');
   if(swatch)swatch.style.opacity='0.5';
   try {
     await api('updateCat',{oldName:name,name,color});
@@ -2388,17 +2451,18 @@ async function addCategory() {
   finally{btn.disabled=false;btn.textContent='Add';}
 }
 
-async function removeCategory(idx,name,e) {
+async function removeCategory(el,e) {
   e.stopPropagation();
+  const name=catOfRow(el);
+  if(name===undefined)return;
   const count=inventory.filter(i=>i.category===name).length;
   if(!confirm(count>0
     ?`"${name}" is used by ${count} item${count!==1?'s':''}. Remove it anyway?`
     :`Remove category "${name}"?`)) return;
-  const btn=document.getElementById('del-cat-'+idx);
-  if(btn){btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';}
+  el.disabled=true;el.innerHTML='<div class="spinner"></div>';
   try {
     await api('deleteCat',{name});
-    categories.splice(idx,1);
+    categories=categories.filter(c=>c.name!==name);
     renderCatList();renderCatTags();renderCatSelect();
     setSyncStatus('ok','Saved '+new Date().toLocaleTimeString());
   } catch(err){document.getElementById('cat-modal-err').textContent='Error: '+err.message;renderCatList();}
@@ -2424,19 +2488,19 @@ async function loadHistory() {
   document.getElementById('history-empty').style.display   = 'none';
   document.getElementById('history-list').innerHTML        = '';
   try {
-    const r = await api('getCheckoutLog', { limit: 100 });
+    const r = await api('getCheckoutLog', { limit: 2000 });
     historyEntries = r.entries || [];
     const assemblies = [...new Map(historyEntries.map(e => [e.assembly_id, e.assembly_name])).entries()];
     const sel  = document.getElementById('history-assembly-filter');
     const prev = sel.value;
     sel.innerHTML = '<option value="">All assemblies</option>'
-      + assemblies.map(([id, name]) => `<option value="${id}">${name}</option>`).join('');
+      + assemblies.map(([id, name]) => `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`).join('');
     if (prev) sel.value = prev;
     renderHistoryView();
   } catch(err) {
     document.getElementById('history-loading').style.display = 'none';
     document.getElementById('history-list').innerHTML =
-      `<div style="color:var(--danger);padding:24px;font-size:13px">Error loading history: ${err.message}</div>`;
+      `<div style="color:var(--danger);padding:24px;font-size:13px">Error loading history: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -2483,8 +2547,8 @@ function renderHistoryView() {
     return `<div class="hist-event" id="hev-${gi}">
       <div class="hist-event-header" onclick="toggleHistEvent(${gi})">
         <span class="hist-chevron">▶</span>
-        <span class="hist-job">${g.job_name}</span>
-        <span class="hist-asm">${g.assembly_name}</span>
+        <span class="hist-job">${escapeHtml(g.job_name)}</span>
+        <span class="hist-asm">${escapeHtml(g.assembly_name)}</span>
         <span class="hist-built">×${g.qty_built} built</span>
         <span class="hist-ts">${ts}</span>
       </div>
@@ -2534,7 +2598,7 @@ function buildHistoryDetail(group) {
           const indent = (i - 1) * 16;
           html += `<div class="hist-sub-header" style="margin-left:${indent}px">
             <span class="hist-sub-icon">◈</span>
-            <span>${seg}</span>
+            <span>${escapeHtml(seg)}</span>
           </div>`;
         }
         // Truncate lastPathSegments at this level so deeper levels re-emit on next component
@@ -2552,23 +2616,35 @@ function buildHistoryDetail(group) {
 
 function histCompRow(name, part, location, qty, indent) {
   return `<div class="hist-comp-row" style="margin-left:${indent}px">
-    <span class="hist-comp-name">${name}</span>
-    ${part     ? `<span class="hist-comp-part">${part}</span>`         : ''}
-    ${location ? `<span class="hist-comp-loc">${location}</span>`      : ''}
-    <span class="hist-comp-qty">−${qty}</span>
+    <span class="hist-comp-name">${escapeHtml(name)}</span>
+    ${part     ? `<span class="hist-comp-part">${escapeHtml(part)}</span>`         : ''}
+    ${location ? `<span class="hist-comp-loc">${escapeHtml(location)}</span>`      : ''}
+    <span class="hist-comp-qty"${qty < 0 ? ' style="color:var(--accent)" title="Returned to stock"' : ''}>${qty < 0 ? '+' + (-qty) : '−' + qty}</span>
   </div>`;
+}
+
+// One CSV cell. Text that Excel or Sheets would run as a formula (=, +, -, @, tab,
+// return at the start) gets a leading ' so it stays text; numbers are left alone.
+function csvCell(v) {
+  let t = v === null || v === undefined ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(t) && !/^[+-]?\d+(\.\d+)?$/.test(t)) t = "'" + t;
+  return '"' + t.replace(/"/g, '""') + '"';
+}
+
+function downloadCSV(filename, header, rows) {
+  const csv = [header.join(','), ...rows.map(r => r.map(csvCell).join(','))].join('\r\n');
+  const url = URL.createObjectURL(new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 function exportHistoryCSV() {
   if (!historyEntries.length) { alert('No history to export.'); return; }
   const cols = ['timestamp','job_name','assembly_name','assembly_id','qty_built','component_name','supplier_part','location','qty_deducted'];
-  const csv  = [cols.join(','), ...historyEntries.map(e =>
-    cols.map(c => '"' + String(e[c] || '').replace(/"/g, '""') + '"').join(',')
-  )].join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = 'checkout_history.csv';
-  a.click();
+  downloadCSV('checkout_history.csv', cols, historyEntries.map(e => cols.map(c => e[c])));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2597,8 +2673,10 @@ function printPickList(id, e) {
   if (e) e.stopPropagation();
   const parent = inventory.find(x => x.id === id);
   if (!parent) return;
-  const qty = parseInt(prompt(`How many units of "${parent.name}" are you building?`, '1')) || 1;
-  if (qty < 1) return;
+  const answer = prompt(`How many units of "${parent.name}" are you building?`, '1');
+  if (answer === null) return;   // cancelled
+  const qty = parseInt(answer, 10);
+  if (!(qty >= 1)) { alert('Enter a whole number of units, 1 or more.'); return; }
   const merged = mergeBomLines(resolveBom(id, qty)).filter(m => m.qty !== 0);
   if (!merged.length) { alert('No components to pick: the BOM is empty or its lines cancel out.'); return; }
   const w = window.open('', '_blank');
@@ -2620,9 +2698,9 @@ function writePickListToWindow(w, parentId, qty, merged) {
   const logoUrl = new URL('assets/aerolab-logo.png', location.href).href;
   const rows = sorted.map(({ item, qty: q }) => `
     <tr>
-      <td>${item.supplier_part || '—'}</td>
-      <td>${item.name}</td>
-      <td>${item.location || '—'}</td>
+      <td>${escapeHtml(item.supplier_part || '—')}</td>
+      <td>${escapeHtml(item.name)}</td>
+      <td>${escapeHtml(item.location || '—')}</td>
       <td class="qty-cell">${q < 0 ? `<span class="return">Return ${-q}</span>` : q}</td>
       <td class="check-cell"><span class="check-box"></span></td>
     </tr>`).join('');
@@ -2631,7 +2709,7 @@ function writePickListToWindow(w, parentId, qty, merged) {
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Pick List — ${parent.name}</title>
+<title>Pick List — ${escapeHtml(parent.name)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 13px; color: #111; padding: 32px; }
@@ -2659,7 +2737,7 @@ function writePickListToWindow(w, parentId, qty, merged) {
 </head>
 <body>
   <div class="header">
-    <h1>Pick List — ${parent.name}</h1>
+    <h1>Pick List — ${escapeHtml(parent.name)}</h1>
     <img src="${logoUrl}" alt="Aerolab">
   </div>
   <div class="meta">
@@ -2689,8 +2767,7 @@ function writePickListToWindow(w, parentId, qty, merged) {
 
 function exportCSV() {
   const cols=['supplier_part','name','category','qty','min','location','unit_cost','supplier','part','notes','barcode'];
-  const csv=[cols.join(','),...inventory.map(i=>cols.map(c=>'"'+(i[c]||'').toString().replace(/"/g,'""')+'"').join(','))].join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='electronics_inventory.csv';a.click();
+  downloadCSV('electronics_inventory.csv', cols, inventory.map(i => cols.map(c => i[c])));
 }
 
 function exportBOMs() {
@@ -2766,12 +2843,7 @@ function exportBOMs() {
     rows.push(new Array(cols.length).fill(''));
   });
 
-  const escape = v => '"' + String(v).replace(/"/g, '""') + '"';
-  const csv = [cols.join(','), ...rows.map(r => r.map(escape).join(','))].join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = 'electronics_boms.csv';
-  a.click();
+  downloadCSV('electronics_boms.csv', cols, rows);
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2789,7 +2861,8 @@ const PW_MODES = {
   change:   { title: 'Change Password', button: 'Change Password', closable: true,  intro: '',
               note: "Your other devices will be signed out. You'll stay signed in here." },
   first:    { title: 'Choose a Password', button: 'Save Password', closable: false,
-              intro: 'Welcome! Choose a password so you can sign in with your email and password next time.', note: '' },
+              intro: 'Welcome! Choose a password so you can sign in with your email and password next time.',
+              note: 'Any other devices signed in to this account will be signed out.' },
   recovery: { title: 'Set a New Password', button: 'Save Password', closable: false,
               intro: 'Choose a new password for your account.', note: 'Your other devices will be signed out.' },
 };
@@ -2841,9 +2914,12 @@ async function changeOwnPassword() {
       const check = await sb.auth.signInWithPassword({ email: sessionUsername, password: current });
       if (check.error) throw new Error('Your current password is incorrect.');
     }
-    const { error } = await sb.auth.updateUser({ password: next, data: { password_set: true } });
+    const { error } = await sb.auth.updateUser({ password: next });
     if (error) throw new Error(error.message);
-    if (pwMode !== 'first') await sb.auth.signOut({ scope: 'others' });
+    markPasswordSet();
+    // Every mode signs out other devices. For a first password this also ends any
+    // session of someone who signed up with this email before the invitee did.
+    await sb.auth.signOut({ scope: 'others' });
     offerToSavePassword(sessionUsername, next);
     closePasswordModal();
     showToast(pwMode === 'first' ? 'Password saved.' : 'Password changed. Your other devices have been signed out.');
@@ -3313,18 +3389,28 @@ document.addEventListener('visibilitychange', () => {
 // Handheld USB / Bluetooth scanners type the code quickly and press Enter. Catch
 // that anywhere outside a text field, so they work without opening the camera.
 let wedgeBuf = '', wedgeLast = 0;
+// Scanners send the label separators of distributor DataMatrix codes as control keys
+const WEDGE_CONTROL_KEYS = { ']': '', '^': '', '6': '' };   // Ctrl+] = GS, Ctrl+^ = RS
 document.addEventListener('keydown', e => {
-  if (!sessionToken || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!sessionToken || e.metaKey || e.altKey) return;
   if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
   if (document.querySelector('.modal-overlay.open:not(#scan-modal)')) return;
   const now = performance.now();
   if (now - wedgeLast > 80) wedgeBuf = '';   // people type slower than scanners
   wedgeLast = now;
+  const scanning = wedgeBuf.length > 0;      // in the middle of a fast burst of keys
+  if (e.ctrlKey) {
+    if (scanning && WEDGE_CONTROL_KEYS[e.key]) { e.preventDefault(); wedgeBuf += WEDGE_CONTROL_KEYS[e.key]; }
+    else wedgeBuf = '';
+    return;
+  }
   if (e.key === 'Enter') {
     const raw = wedgeBuf;
     wedgeBuf = '';
     if (raw.length >= 4) { e.preventDefault(); closeScanner(); handleScan(raw); }
   } else if (e.key.length === 1) {
+    // Keep a scanned space from pressing whatever button has focus
+    if (scanning) e.preventDefault();
     wedgeBuf += e.key;
   }
 });
@@ -3437,7 +3523,7 @@ function renderScanSheet() {
         <div class="scan-preview" style="margin-top:6px">Stock ${st.before.toLocaleString()} → ${st.item.qty.toLocaleString()}</div></div>`
       + scanItemHtml(st.item);
     footer.innerHTML = err + `
-      <button class="btn btn-ghost" id="scan-undo" onclick="undoScanAdjust()">↶ Undo</button>
+      ${st.undo ? '<button class="btn btn-ghost" id="scan-undo" onclick="undoScanAdjust()">↶ Undo</button>' : ''}
       <button class="btn btn-ghost" onclick="closeScanSheet()">Done</button>
       <button class="btn btn-primary" onclick="openScanner()">⌖ Scan next</button>`;
   } else if (st.view === 'choose') {
@@ -3524,7 +3610,7 @@ async function applyScanAdjust() {
   const btn = document.getElementById('scan-apply');
   btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
   try {
-    const before = item.qty;
+    // The database says what the stock was and what changed; this page's copy may be stale
     const r = await api('adjustQty', { id: item.id, action, qty, note });
     const live = inventory.find(i => i.id === item.id) || item;
     live.qty = r.newQty;
@@ -3533,12 +3619,11 @@ async function applyScanAdjust() {
     if (selectedId === live.id) renderDetail(live.id);
     setSyncStatus('ok', 'Saved ' + new Date().toLocaleTimeString());
     const message = action === 'add' ? `Checked in ${qty.toLocaleString()}`
-                  : action === 'remove' ? `Checked out ${(before - live.qty).toLocaleString()}` : `Count set to ${qty.toLocaleString()}`;
-    // Undo applies the opposite of what actually changed
-    const change = live.qty - before;
-    const undo = action === 'set' ? { action: 'set', qty: before }
-               : change > 0 ? { action: 'remove', qty: change } : { action: 'add', qty: -change };
-    showScanSheet({ view: 'done', code: st.code, item: live, before, message, undo, note });
+                  : action === 'remove' ? `Checked out ${(-r.change).toLocaleString()}` : `Count set to ${qty.toLocaleString()}`;
+    // Undo reverses exactly this change (also for Set Count), leaving anyone else's
+    // changes made since then in place
+    const undo = r.change > 0 ? { action: 'remove', qty: r.change } : r.change < 0 ? { action: 'add', qty: -r.change } : null;
+    showScanSheet({ view: 'done', code: st.code, item: live, before: r.before, message, undo, note });
   } catch (e) {
     scanError('Error: ' + e.message);
     btn.disabled = false;
@@ -3719,11 +3804,7 @@ function showMovesFor(id) {
 function exportMovesCSV() {
   if (!movesEntries.length) { alert('No stock moves to export.'); return; }
   const cols = ['created_at', 'item_id', 'item_name', 'supplier_part', 'location', 'action', 'qty_requested', 'qty_change', 'qty_after', 'note', 'user_email'];
-  const csv = [cols.join(','), ...movesEntries.map(m => cols.map(c => '"' + String(m[c] ?? '').replace(/"/g, '""') + '"').join(','))].join('\n');
-  const a = document.createElement('a');
-  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-  a.download = 'stock_moves.csv';
-  a.click();
+  downloadCSV('stock_moves.csv', cols, movesEntries.map(m => cols.map(c => m[c])));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -3823,10 +3904,10 @@ function writeLabelsToWindow(w, items, size) {
   @media screen { body { background: #e5e5e5; padding: 16px; } .label { background: #fff; outline: 1px dashed #aaa; margin-bottom: 8px; } .sheet .label { margin: 0; } }
   ${css}
 </style>
+<script>window.onload = () => window.print();<\/script>
 </head>
 <body>
 ${content}
-<script>window.onload = () => window.print();<\/script>
 </body>
 </html>`);
   w.document.close();
@@ -3873,7 +3954,15 @@ function showLogin(errMsg) {
   document.getElementById('login-password').value  = '';
   sessionToken = sessionUsername = sessionUserId = null;
   sessionRole  = 'viewer';
+  sessionStarted = false;   // the next sign-in starts a fresh session
   stopLiveUpdates();
+  // Nothing from the last session keeps running or reappears after the next sign-in
+  closeScanner();
+  document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
+  scanState = null; bomCoData = null;
+  selectedId = null;
+  document.getElementById('detail-panel').classList.add('closed');
+  closeNav();
 }
 
 function showApp(email) {
@@ -3891,22 +3980,31 @@ function setLoginInfo(msg) {
   document.getElementById('login-info').textContent = msg || '';
 }
 
+// Whether this account has chosen a password. It lives in profiles, where only the
+// database can set it (mark_password_set), not in user_metadata, which anyone who
+// signs up can write: someone signing up first with an invited email must not be
+// able to skip the "choose a password" step for the real invitee.
+let sessionPasswordSet = false;
+
 // A Supabase session exists: load the role, then the data, then go live.
+// Returns 'ok', 'no-access' (no profile: signed out) or 'retry' (couldn't reach the server).
 async function startSession(session) {
   sessionToken    = session.access_token;
   sessionUsername = session.user.email;
   sessionUserId   = session.user.id;
-  const profile = await sb.from('profiles').select('role').eq('user_id', session.user.id).maybeSingle();
+  const profile = await sb.from('profiles').select('role, password_set').eq('user_id', session.user.id).maybeSingle();
+  if (profile.error) return 'retry';   // a network hiccup is not "no access"
   if (!profile.data) {
     await sb.auth.signOut({ scope: 'local' });
     showLogin("This account doesn't have access. Ask an admin to invite you.");
-    return false;
+    return 'no-access';
   }
   sessionRole = profile.data.role;
+  sessionPasswordSet = !!profile.data.password_set;
   showApp(sessionUsername);
   syncAll(false);
   startLiveUpdates();
-  return true;
+  return 'ok';
 }
 
 let sessionStarted  = false;
@@ -3919,17 +4017,42 @@ async function handleAuthEvent(event, session) {
     showLogin(document.getElementById('login-err').textContent);
     return;
   }
+  const byPassword = passwordSignIn;   // read now: startSession waits on the network
   if (event === 'PASSWORD_RECOVERY') {
-    if (!sessionStarted) { sessionStarted = true; await startSession(session); }
+    if (!sessionStarted) { sessionStarted = true; await beginSession(session); }
     openPasswordModal('recovery');
     return;
   }
   if ((event === 'INITIAL_SESSION' || event === 'SIGNED_IN') && !sessionStarted) {
     sessionStarted = true;
-    const started = await startSession(session);
+    const started = await beginSession(session);
+    if (started !== 'ok') return;
+    if (byPassword) markPasswordSet();   // they clearly have a password
     // Arrived from an invite or sign-in link and never chose a password
-    if (started && !passwordSignIn && !session.user.user_metadata?.password_set) openPasswordModal('first');
+    else if (!sessionPasswordSet) openPasswordModal('first');
   }
+}
+
+// startSession, and if the server can't be reached, keep trying every few seconds
+// with the saved session rather than signing anyone out.
+async function beginSession(session) {
+  const result = await startSession(session);
+  if (result === 'retry') {
+    showLogin("Can't reach ElectoStock right now. Trying again…");
+    document.body.classList.add('auth-pending');   // no login form while a session exists
+    setTimeout(async () => {
+      if (sessionStarted) return;
+      const { data } = await sb.auth.getSession();
+      if (data.session) handleAuthEvent('INITIAL_SESSION', data.session);
+      else document.body.classList.remove('auth-pending');
+    }, 5000);
+  }
+  return result;
+}
+
+function markPasswordSet() {
+  sessionPasswordSet = true;
+  sb.rpc('mark_password_set').then(({ error }) => { if (error) console.warn('mark_password_set:', error.message); });
 }
 
 // Supabase advises not calling other Supabase methods inside this callback
@@ -3947,11 +4070,9 @@ async function submitLogin() {
   btn.innerHTML = '<div class="spinner"></div>';
   passwordSignIn = true;
   try {
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    const { error } = await sb.auth.signInWithPassword({ email, password });
     if (error) throw new Error(authErrorMessage(error));
-    offerToSavePassword(email, password);
-    // They clearly have a password; don't ask them to choose one later
-    if (!data.user.user_metadata?.password_set) sb.auth.updateUser({ data: { password_set: true } });
+    offerToSavePassword(email, password);   // handleAuthEvent records that they have a password
   } catch (e) {
     err.textContent = e.message || 'Sign-in failed';
   } finally {

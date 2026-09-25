@@ -1,2 +1,5 @@
 node_modules/
 supabase/.temp/
+# Sheet exports and the SQL generated from them contain real data
+*.csv
+import.sql

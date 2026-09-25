@@ -16,7 +16,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - `scripts/import-sheet.mjs`: a one-off import from CSV exports of the old Google Sheet.
 - `Code.gs`: Apps Script bound to the old Google Sheet. It keeps a read-only copy of the data there, refreshed hourly, and answers any old copy of the app with "moved". It is deployed with clasp; `.clasp.json`, `.claspignore` and `appsscript.json` belong to it. See "Google Sheet copy" below.
 - `tests/`:
-  - `tests/db/`: tests that run the migrations against PGlite (Postgres compiled to WebAssembly).
+  - `tests/db/`: tests that run the migrations against PGlite (Postgres compiled to WebAssembly). `harness.mjs` stands in for the parts of Supabase the schema uses (`anon` / `authenticated`, `auth.users`, `auth.uid()`); it doesn't reproduce Supabase's default grants to those roles, so check new tables and functions for explicit revokes and grants. `hardening.test.mjs` covers the fixes from the security review.
   - `tests/import.test.mjs`: tests for the import script.
   - `tests/scan-codes.test.mjs`: tests for `assets/scan-codes.js`, with real-format Digi-Key, Mouser and LCSC label contents.
   - `tests/sheet-copy.test.mjs`: runs `Code.gs` against stand-ins for the Apps Script services, feeding it a real snapshot from PGlite.
@@ -33,7 +33,8 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - **Pipeline** (`.github/workflows/deploy.yml`): every push runs the tests. On `main`, if they pass, two more jobs run:
   1. `database` runs `supabase db push`, which applies any migrations in `supabase/migrations/` the project hasn't run yet.
   2. `pages` publishes `index.html` and `assets/` to GitHub Pages at https://bromalis.github.io/electostock/, and nothing else from the repo. Anything else the page needs at runtime must be added to the "Collect the site" step.
-  The database job uses the repository secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`.
+  The database job uses the repository secrets `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD`, given only to the steps that run the Supabase CLI.
+  - Actions are pinned to commit SHAs (with the tag in a comment); `.github/dependabot.yml` proposes updates monthly. Keep new actions pinned the same way. The `production` environment should allow only `main` (Settings > Environments > production > Deployment branches).
   - GitHub Pages is set to Source: GitHub Actions, so only this workflow publishes the site. A push whose tests fail changes nothing live.
   - The Supabase access token expires. When the `database` job starts failing on authentication, generate a new token in Supabase (Account > Access Tokens, scoped to the project) and update the secret.
   - Pushing a change to `.github/workflows/` needs a GitHub login with the `workflow` scope. On this machine, the git credential manager's token lacks it, while the `gh` login has it. Push those changes with `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push`.
@@ -42,6 +43,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - **Auth settings** live in the Supabase dashboard, not in the repo:
   - Site URL and Redirect URLs must include every page origin that sends emailed links, including `http://localhost:8765/` for local testing.
   - Email sign-ups must stay **enabled**. Invite-only is enforced by the `handle_new_user` trigger.
+  - "Confirm email" must stay **on**. Anyone can call `signUp` with an invited email before the invitee does; with confirmation on, they get no session, and the invitee's first sign-in forces a new password and signs out every other device (see Auth flows).
   - Minimum password length is 8, the same as `MIN_PASSWORD_LENGTH` in `index.html`.
   - Emailed links (invites, sign-in links, password resets) stay valid for 1 hour (Email > "Email OTP expiration" = 3600). The app's "expires in an hour" message and the email templates say the same, so update all three together. Supabase allows at most 24 hours. An expired invite isn't a problem: the account already exists, so "Email me a sign-in link" on the login screen, or "Resend invite" in the Users dialog, sends a fresh link.
   - Email goes out over custom SMTP. For now that is Gmail (`smtp.gmail.com:465`, sending as ben@aerolab.com with an app password), a stopgap until Resend on `mail.aerolab.com` is set up. Supabase's built-in sender only delivers to members of the Supabase organisation.
@@ -60,7 +62,9 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 ### Permissions (database)
 - Roles live in `profiles.role` (`viewer` < `user` < `admin`), and every RLS policy checks them through `has_role()`. A role change takes effect on the user's next request. The page re-reads the role on every sync to update which buttons it shows (`body[data-role]` + `.needs-user` / `.needs-admin`).
 - Sign-up is invite-only. `admin_invite()` stores an email and role in `invites`, and the `handle_new_user` trigger on `auth.users` rejects any email that hasn't been invited.
-- `checkout_log` has no insert policy: only `checkout()` (a security definer function) writes to it. Likewise `stock_moves` is written only by `adjust_stock()`.
+- `checkout_log` has no insert policy: only `checkout()` (a security definer function) writes to it. Likewise `stock_moves` is written only by `move_stock()`.
+- Security definer functions use `set search_path = public, pg_temp` (plus `auth` where needed), so a temporary table can't stand in for a real one.
+- Numeric columns carry `… < 'Infinity'` checks: Postgres counts NaN as larger than every number, so `qty >= 0` alone lets NaN through.
 - User admin goes through `admin_*` functions. Their guards: admins can't change their own role or delete themselves, and the `keep_one_admin` trigger ensures at least one admin always remains.
 - Grants: `anon` gets nothing. `authenticated` gets table access (RLS decides) plus EXECUTE on the listed functions. New functions need an explicit `grant execute`.
 
@@ -72,8 +76,10 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   Costs can therefore also be zero or negative.
 - Cost rollups are triggers. `items_before_write` recalculates an assembly's `unit_cost` from its leaves (`bom_cost()`) whenever its row is written. A change to any item's cost "touches" that item's direct parents, and the recalculation cascades all the way up. As a result, an assembly's cost can't be set by hand.
 - `bom_prevent_cycles` rejects any line that would create a loop, however the line is written.
-- `checkout()`, `save_bom()` and `adjust_stock()` each run as a single transaction. The checkout log keeps one row per path, including negative rows, and records `user_email`.
-- `adjust_stock(id, action, qty, note)` logs every check in / check out / set to `stock_moves`, with the actual change after flooring at 0. The old `adjust_qty()` now just calls it with no note; nothing in the page uses it any more, so drop it in a later migration.
+- `checkout()`, `save_bom()` and `move_stock()` each run as a single transaction. The checkout log keeps one row per path, including negative rows, and records `user_email`.
+- `move_stock(id, action, qty, note)` logs every check in / check out / set to `stock_moves`, with the actual change after flooring at 0, and returns `{qty_before, qty_after, qty_change}` as the database saw them. The page reports and undoes that change, not its own possibly stale copy. The older `adjust_stock()` and `adjust_qty()` wrap it and are no longer used by the page; drop them in a later migration.
+- A changed quantity in the item form is saved as a logged "Set Count" through `move_stock`, not written to `items.qty`.
+- Writes to `bom_lines` take one advisory lock per transaction (`bom_lines_lock`), so the cycle check sees lines another transaction just committed. `keep_one_admin` takes a lock too, so two admins can't demote each other at the same moment.
 - `index.html` keeps its own copies of `resolveBom` / `mergeBomLines` / `calcBomCost` / `getWhereUsed` for previews, cost display, pick lists and the "Used In" panel. Keep them consistent with the SQL.
 
 ### Auth flows (`index.html`)
@@ -81,7 +87,9 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - `handleAuthEvent` handles four cases:
   - `INITIAL_SESSION` / `SIGNED_IN` call `startSession`, which loads the role, runs the first sync and starts live updates.
   - `PASSWORD_RECOVERY` opens the password dialog in `recovery` mode.
-  - A user without `user_metadata.password_set` (someone who arrived from an invite link) gets the dialog in `first` mode.
+  - A user whose `profiles.password_set` is false (someone who arrived from an invite link) gets the dialog in `first` mode. That flag is set only by `mark_password_set()`, after the user sets a password or signs in with one. It used to be read from `user_metadata`, which anyone signing up can write.
+  - Setting a password in any mode, including `first`, signs out every other device.
+  - If the profile can't be loaded (network), `beginSession` retries every few seconds with the saved session instead of treating it as "no access". A sync that finds the profile gone signs the user out.
 - Changing your own password first re-checks the current password with `signInWithPassword`, then calls `updateUser`, then signs out other devices.
 - After a successful password sign-in or password change, `offerToSavePassword` triggers Chrome's save/update prompt.
 
@@ -109,11 +117,17 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - A script in `<head>` sets `data-theme` before first paint, from the saved `electostock_theme` value or the device setting.
 - Format money with `fmtMoney` so negative values read `−$0.50`.
 
+### Showing stored data
+- Any `user` can edit item names, notes, locations, categories and job names, and admins see them. Put stored values into HTML only through `escapeHtml()` (and notes through `linkifyNotes()`, which escapes around its links), category colours through `safeColor()`, and never build `onclick` code from them: pass an id or index, or read a `data-` attribute. The pick list and label windows are the same origin as the app, so the same applies there.
+- CSV exports go through `downloadCSV` / `csvCell`, which keeps text that starts with `=`, `+`, `-` or `@` from running as a spreadsheet formula.
+
 ## Google Sheet copy (`Code.gs`)
 
 - `refreshSheetCopy()` runs every hour on a time trigger, installed once with `installHourlyRefresh()`.
   - It calls `export_snapshot(p_token)` (migration `…_sheet_export.sql`) as the anonymous API role, sending the publishable key in the `apikey` header only.
-  - It rewrites the Inventory, Categories, BOMs and Checkout Log tabs, keeping the old column order with any new columns appended, and protects them so only the owner can edit. It also writes an "About this copy" tab. The old backend's Users, Sessions and Meta tabs, which held password hashes, have been deleted; nothing uses them.
+  - It rewrites the Inventory, Categories, BOMs, Checkout Log and Stock Moves tabs, keeping the old column order with any new columns appended, and protects them so only the owner can edit.
+  - Text is written with a leading apostrophe (`cell()`), which Sheets hides, so values from the app stay text: no live formulas from item names or notes, and "0805" stays "0805".
+  - New values are written over the old before leftovers are cleared, so a failed write leaves the previous copy. A script lock keeps two refreshes from overlapping. It also writes an "About this copy" tab. The old backend's Users, Sessions and Meta tabs, which held password hashes, have been deleted; nothing uses them.
 - The token is in Script Properties as `EXPORT_TOKEN`. The database stores only its SHA-256. A new token comes from `select public.create_export_token();` in the SQL Editor; `delete from public.export_tokens;` revokes all tokens.
 - `doGet` / `doPost` return "ElectoStock has moved", so an old copy of the page still open somewhere can't write to the sheet.
-- Deploy with `npm run deploy` (on Windows PowerShell, `npm.cmd run deploy`). It runs the tests, then `clasp push -f`, then updates the old web-app deployment. `npm run push` does only the upload, which is enough for the hourly refresh because triggers run the latest uploaded code. The pipeline doesn't deploy this script, so deploy it by hand whenever `Code.gs` or `appsscript.json` changes. `clasp push` replaces the whole online project, so make changes in the repo, not in the online editor. clasp may need `clasp login` again whenever Google Workspace asks you to sign in again; the error is `invalid_rapt`. Without `-f`, clasp prints "Skipping push." and exits 0, so always check what actually went live.
+- Deploy with `npm run deploy` (on Windows PowerShell, `npm.cmd run deploy`). It runs the tests, then `clasp push -f`, then updates the old web-app deployment. `npm run push` does only the upload, which is enough for the hourly refresh because triggers run the latest uploaded code. The pipeline doesn't deploy this script, so deploy it by hand whenever `Code.gs` or `appsscript.json` changes. `appsscript.json` lists the only scopes it may use (this spreadsheet, outside requests, triggers). After a change to them, run `refreshSheetCopy` once in the Apps Script editor to grant them, or the hourly trigger fails. Keep editing rights on the spreadsheet to its owner: anyone who can edit it can edit the script, which runs as the owner. `clasp push` replaces the whole online project, so make changes in the repo, not in the online editor. clasp may need `clasp login` again whenever Google Workspace asks you to sign in again; the error is `invalid_rapt`. Without `-f`, clasp prints "Skipping push." and exits 0, so always check what actually went live.

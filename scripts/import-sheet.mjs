@@ -68,6 +68,12 @@ export function buildImport(files) {
     if (!(id > 0)) { if (r.name) notes.push(`Skipped a row without an id: "${r.name}".`); continue; }
     if (byId.has(id)) { problems.push(`Item id ${id} appears twice ("${byId.get(id).name}" and "${r.name}").`); continue; }
     if (!r.name) { problems.push(`Item id ${id} has no name.`); continue; }
+    // Text that isn't a number ("12 pcs", "€3") would silently become 0
+    for (const f of ['qty', 'min', 'unit_cost']) {
+      if (r[f] && !Number.isFinite(Number(String(r[f]).replace(/[$,\s]/g, '')))) {
+        problems.push(`"${r.name}" (id ${id}): ${f} "${r[f]}" isn't a number.`);
+      }
+    }
     let qty = toNum(r.qty);
     if (qty < 0) { notes.push(`"${r.name}" (id ${id}) had quantity ${qty}; imported as 0.`); qty = 0; }
     const item = {
@@ -144,6 +150,8 @@ export function toSql({ categories, items, lines, log }) {
   out.push(`-- ElectoStock import from the Google Sheet, generated ${new Date().toISOString()}.`);
   out.push('-- Replaces all inventory data; users, profiles and invites are left alone.');
   out.push('begin;');
+  // sqlText only doubles single quotes, which is all a literal needs with this on (the default)
+  out.push('set local standard_conforming_strings = on;');
   out.push('truncate public.checkout_log, public.stock_moves, public.bom_lines, public.items, public.categories restart identity;');
   if (categories.length) {
     out.push('insert into public.categories (name, color) values');
