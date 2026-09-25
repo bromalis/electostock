@@ -1119,7 +1119,9 @@ const ACTIONS = {
   // Partial update: only the fields sent are written. Assembly costs above this
   // item are recalculated by the database and arrive through live updates.
   async update({ item }) {
-    const rows = changed(ok(await sb.from('items').update(itemFields(item)).eq('id', item.id).select()), 'Item');
+    // Stock levels change only through move_stock (adjustQty); the database refuses qty here
+    const { qty, ...fields } = itemFields(item);
+    const rows = changed(ok(await sb.from('items').update(fields).eq('id', item.id).select()), 'Item');
     return { item: toItem(rows[0]), cost_updates: [] };
   },
   async delete({ id }) {

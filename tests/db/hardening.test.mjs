@@ -51,7 +51,7 @@ test('existing accounts with password_set in their metadata keep it', async () =
 test('NaN and Infinity are refused everywhere a user can send a number', async () => {
   const { db, uma, R1, C1, Board, item } = await setup();
   for (const bad of ['NaN', 'Infinity']) {
-    await rejects(q(db, uma, 'update items set qty = $1 where id = $2', [bad, R1]), /items_numbers_finite|check constraint/);
+    await rejects(db.query('update items set qty = $1 where id = $2', [bad, R1]), /items_numbers_finite|check constraint/);   // even as the owner
     await rejects(q(db, uma, 'update items set unit_cost = $1 where id = $2', [bad, R1]), /items_numbers_finite|check constraint/);
     await rejects(q(db, uma, 'update items set min = $1 where id = $2', [bad, R1]), /items_numbers_finite|check constraint/);
     await rejects(q(db, uma, 'update bom_lines set quantity = $1 where parent_id = $2', [bad, Board]), /bom_lines_quantity_finite|check constraint/);
@@ -115,4 +115,22 @@ test('the sheet export includes the stock-move log', async () => {
   const token = (await db.query('select public.create_export_token() as t')).rows[0].t;
   const s = (await q(db, null, 'select public.export_snapshot($1) as s', [token])).rows[0].s;
   assert.deepEqual(s.stock_moves.map(m => [m.item_name, m.action, m.qty_change, m.note]), [['R1', 'add', 5, 'restock']]);
+});
+
+// ── Stock levels only through the logging functions ─────────────────────────
+
+test('users cannot write quantities directly, only through move_stock and checkout', async () => {
+  const { db, uma, R1, C1, Board, item } = await setup();
+  await rejects(q(db, uma, 'update items set qty = 0 where id = $1', [R1]), /permission denied/);
+  await rejects(q(db, uma, "update items set qty = 0, notes = 'x' where id = $1", [R1]), /permission denied/);
+  // Every other column is still editable, and costs still roll up through the triggers
+  await q(db, uma, "update items set name = 'R1 0805', notes = 'reel 2', unit_cost = 0.2, min = 10, barcode = 'B1' where id = $1", [R1]);
+  assert.equal(num((await item(Board)).unit_cost).toFixed(2), '-0.10');   // 2 × 0.2 − 1 × 0.5
+  // The functions that log still change stock
+  await rpc(db, uma, 'move_stock', { p_id: R1, p_action: 'remove', p_qty: 4, p_note: '' });
+  await rpc(db, uma, 'checkout', { p_assembly_id: Board, p_qty_built: 1, p_job_name: 'J' });
+  assert.equal(num((await item(R1)).qty), 94);   // 100 − 4 − 2
+  assert.equal(num((await item(C1)).qty), 51);   // the BOM's −1 returns one
+  // New items can still start with a quantity
+  await q(db, uma, "insert into items (name, qty) values ('New part', 25)");
 });

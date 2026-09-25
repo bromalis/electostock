@@ -78,7 +78,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 - `bom_prevent_cycles` rejects any line that would create a loop, however the line is written.
 - `checkout()`, `save_bom()` and `move_stock()` each run as a single transaction. The checkout log keeps one row per path, including negative rows, and records `user_email`.
 - `move_stock(id, action, qty, note)` logs every check in / check out / set to `stock_moves`, with the actual change after flooring at 0, and returns `{qty_before, qty_after, qty_change}` as the database saw them. The page reports and undoes that change, not its own possibly stale copy. The older `adjust_stock()` and `adjust_qty()` wrap it and are no longer used by the page; drop them in a later migration.
-- A changed quantity in the item form is saved as a logged "Set Count" through `move_stock`, not written to `items.qty`.
+- Stock levels change only through `move_stock()` and `checkout()`, which log every change. `authenticated` has UPDATE on every `items` column except `qty` (migration `…_qty_only_through_functions.sql`), so a direct `PATCH /items {qty}` is refused. A changed quantity in the item form is saved as a logged "Set Count" through `move_stock`. A new item can still be inserted with a starting quantity. A new `items` column needs adding to that grant.
 - Writes to `bom_lines` take one advisory lock per transaction (`bom_lines_lock`), so the cycle check sees lines another transaction just committed. `keep_one_admin` takes a lock too, so two admins can't demote each other at the same moment.
 - `index.html` keeps its own copies of `resolveBom` / `mergeBomLines` / `calcBomCost` / `getWhereUsed` for previews, cost display, pick lists and the "Used In" panel. Keep them consistent with the SQL.
 

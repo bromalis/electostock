@@ -39,7 +39,7 @@ test('viewers can read but not write', async () => {
   assert.equal((await rows(db, vic, 'select * from items')).length, 4);
   assert.equal((await rows(db, vic, 'select * from bom_lines')).length, 4);
   await rejects(q(db, vic, "insert into items (name) values ('x')"), /row-level security/);
-  assert.equal((await q(db, vic, 'update items set qty = 0 where id = $1', [ids.R1])).affectedRows, 0);
+  assert.equal((await q(db, vic, "update items set notes = 'x' where id = $1", [ids.R1])).affectedRows, 0);
   await rejects(rpc(db, vic, 'adjust_qty', { p_id: ids.R1, p_action: 'add', p_qty: 1 }), /not allowed/);
   await rejects(rpc(db, vic, 'checkout', { p_assembly_id: ids.Board, p_qty_built: 1, p_job_name: 'J' }), /not allowed/);
   await rejects(rpc(db, vic, 'save_bom', { p_parent_id: ids.Sub, p_lines: '[]' }), /not allowed/);
