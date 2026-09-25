@@ -7,13 +7,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bills of materials), BOM checkout (stock deduction for builds), and a checkout log.
 
 - `index.html`: a standalone single-page frontend (inline CSS and JS, no framework, no build step). It is served by GitHub Pages and talks to Supabase through `supabase-js`, loaded from jsDelivr and pinned with an SRI hash.
-- `assets/`: the Aerolab logo shown in the sidebar, on the login screen and on the printed pick list (`aerolab-logo.png`, trimmed and scaled to 480 px wide), the browser-tab icon (`favicon-32.png`, the logo's "A" on a transparent square) and the phone home-screen icon (`apple-touch-icon.png`, the same "A" on white).
+- `assets/`:
+  - the Aerolab logo shown in the sidebar, on the login screen and on the printed pick list (`aerolab-logo.png`, trimmed and scaled to 480 px wide);
+  - the browser-tab icon (`favicon-32.png`, the logo's "A" on a transparent square) and the home-screen icons: `apple-touch-icon.png` (iPhone) and `icon-192.png`, `icon-512.png` and `icon-maskable-512.png` (Android), all the same "A" on white;
+  - `manifest.webmanifest`, which makes the page installable as an app ("Add to Home Screen");
+  - `scan-codes.js`, the pure logic for reading scanned codes and matching them to items. It is the one script kept out of `index.html`, so `tests/scan-codes.test.mjs` can load it.
 - `supabase/migrations/*.sql`: the whole backend. It contains the Postgres schema, the row-level security (RLS) policies, the triggers and the database functions.
 - `scripts/import-sheet.mjs`: a one-off import from CSV exports of the old Google Sheet.
 - `Code.gs`: Apps Script bound to the old Google Sheet. It keeps a read-only copy of the data there, refreshed hourly, and answers any old copy of the app with "moved". It is deployed with clasp; `.clasp.json`, `.claspignore` and `appsscript.json` belong to it. See "Google Sheet copy" below.
 - `tests/`:
   - `tests/db/`: tests that run the migrations against PGlite (Postgres compiled to WebAssembly).
   - `tests/import.test.mjs`: tests for the import script.
+  - `tests/scan-codes.test.mjs`: tests for `assets/scan-codes.js`, with real-format Digi-Key, Mouser and LCSC label contents.
   - `tests/sheet-copy.test.mjs`: runs `Code.gs` against stand-ins for the Apps Script services, feeding it a real snapshot from PGlite.
 
 ## Commands
@@ -55,7 +60,7 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 ### Permissions (database)
 - Roles live in `profiles.role` (`viewer` < `user` < `admin`), and every RLS policy checks them through `has_role()`. A role change takes effect on the user's next request. The page re-reads the role on every sync to update which buttons it shows (`body[data-role]` + `.needs-user` / `.needs-admin`).
 - Sign-up is invite-only. `admin_invite()` stores an email and role in `invites`, and the `handle_new_user` trigger on `auth.users` rejects any email that hasn't been invited.
-- `checkout_log` has no insert policy: only `checkout()` (a security definer function) writes to it.
+- `checkout_log` has no insert policy: only `checkout()` (a security definer function) writes to it. Likewise `stock_moves` is written only by `adjust_stock()`.
 - User admin goes through `admin_*` functions. Their guards: admins can't change their own role or delete themselves, and the `keep_one_admin` trigger ensures at least one admin always remains.
 - Grants: `anon` gets nothing. `authenticated` gets table access (RLS decides) plus EXECUTE on the listed functions. New functions need an explicit `grant execute`.
 
@@ -67,7 +72,8 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
   Costs can therefore also be zero or negative.
 - Cost rollups are triggers. `items_before_write` recalculates an assembly's `unit_cost` from its leaves (`bom_cost()`) whenever its row is written. A change to any item's cost "touches" that item's direct parents, and the recalculation cascades all the way up. As a result, an assembly's cost can't be set by hand.
 - `bom_prevent_cycles` rejects any line that would create a loop, however the line is written.
-- `checkout()`, `save_bom()` and `adjust_qty()` each run as a single transaction. The checkout log keeps one row per path, including negative rows, and records `user_email`.
+- `checkout()`, `save_bom()` and `adjust_stock()` each run as a single transaction. The checkout log keeps one row per path, including negative rows, and records `user_email`.
+- `adjust_stock(id, action, qty, note)` logs every check in / check out / set to `stock_moves`, with the actual change after flooring at 0. The old `adjust_qty()` now just calls it with no note; nothing in the page uses it any more, so drop it in a later migration.
 - `index.html` keeps its own copies of `resolveBom` / `mergeBomLines` / `calcBomCost` / `getWhereUsed` for previews, cost display, pick lists and the "Used In" panel. Keep them consistent with the SQL.
 
 ### Auth flows (`index.html`)
@@ -81,6 +87,20 @@ ElectoStock is an electronics parts inventory tracker with multi-level BOMs (bil
 
 ### Live updates
 - A realtime channel on `items`, `bom_lines` and `categories` triggers a debounced silent `syncAll`. The page doesn't poll. `syncAll` queues a second run if a change arrives while a sync is already in progress.
+
+### Phones and scanning (`index.html`)
+- One page serves desktop and phones.
+  - The inventory table responds to its own width (a container query on `.main`), not the window's, so opening the detail panel counts too. It drops Notes and the row-button labels at 1400 px, Supplier at 980, then Category, the row buttons and the stock bar at 840 (rows still open the detail panel, which has every action, including Delete). At 640 px it becomes cards. Header and cell classes (`c-part`, `c-name`, …) drive this, so a new column needs one.
+  - At 820 px and narrower (the window): the sidebar becomes a drawer (`openNav` / `closeNav`), the stats and alerts give way to a row of chips (`renderViewChips`: active category filters, then the views with counts) that scrolls sideways along with the sort and assembly filters, dialogs become bottom sheets with the buttons pinned, the detail panel goes full-screen, and a floating Scan button appears. Inputs are 16 px there, because iOS zooms into smaller ones. Safe-area insets keep content clear of the iPhone notch once the page is installed.
+  - The sidebar scrolls as a whole when the window is short; the sync status stays pinned at its bottom.
+  - Long names, part numbers and locations wrap rather than being cut off with "…".
+  - An install tip (`showInstallTip`) shows on phones until the app is installed or the tip is dismissed: an Install button where Chrome offers `beforeinstallprompt` (Android), otherwise the Share > Add to Home Screen steps (iPhone).
+- Installing: "Add to Home Screen" in Safari (iPhone) or Chrome (Android). There is no service worker, so the app needs a connection. On iPhone the installed app keeps its own sign-in, separate from Safari's, and emailed links always open in Safari.
+- Scanning (`openScanner`): the camera through `getUserMedia`, decoded with the built-in `BarcodeDetector` where it handles QR and DataMatrix (Android's Chrome), otherwise with the `barcode-detector` ponyfill (ZXing in WebAssembly; Safari on iPhone). The ponyfill and `qrcode-generator` (labels) load on first use from jsDelivr, pinned with SRI hashes in `LIBS`. The ponyfill fetches its `.wasm` file from jsDelivr itself. Only the area inside the on-screen frame is decoded.
+- USB and Bluetooth scanners that type like a keyboard work anywhere outside a text field: fast keystrokes ending in Enter count as a scan.
+- `handleScan` → `ScanCodes.parseCode` / `matchItems` → the scan sheet (`scanState.view`: `item`, `choose`, `none`, `link`, `done`, `gone`). Matching order: our label's item id; then `barcode`, `supplier_part` and `part` against the label's supplier, customer and manufacturer part numbers; then names and notes containing the manufacturer part number. A bag label defaults to Check In with the label's quantity. "Link to item" stores the code in `items.barcode` (unique, blank means none).
+- Our labels (`printLabels`) carry a QR code with `https://bromalis.github.io/electostock/#item=<id>` (`ScanCodes.LABEL_BASE_URL`), wherever they were printed from. Scanning one with the phone's own camera app opens the site, and `#item=` opens that item's scan sheet once the inventory has loaded.
+- Stock Moves view: `stock_moves`, newest 300. It has no live updates; use Refresh.
 
 ### Theme
 - Colours are CSS custom properties on `:root` (dark), overridden by `:root[data-theme="light"]`. Use the tokens rather than hard-coded colours; the printed pick list is the exception and stays black on white.

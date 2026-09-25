@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <script>
   // Saved choice wins; otherwise follow the device setting.
   (function () {
@@ -15,6 +15,13 @@
 <title>ElectoStock — Component Inventory</title>
 <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<!-- Installable from the browser ("Add to Home Screen") on iPhone and Android -->
+<link rel="manifest" href="assets/manifest.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ElectoStock">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#131619">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -46,7 +53,7 @@
   body{font-family:var(--sans);background:var(--bg);color:var(--text);height:100vh;overflow:hidden;font-size:14px;line-height:1.5;}
   .shell{display:flex;height:100vh;overflow:hidden;}
 
-  .sidebar{width:224px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow:hidden;}
+  .sidebar{width:224px;flex-shrink:0;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;height:100vh;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;}
   .logo{padding:20px 18px 16px;border-bottom:1px solid var(--border);}
   .brand-logo{display:block;width:100%;max-width:150px;height:auto;margin-bottom:10px;}
   .logo-mark{font-family:var(--mono);font-size:11px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;margin-bottom:2px;}
@@ -57,7 +64,7 @@
   .nav-item:hover{background:var(--bg3);color:var(--text);}
   .nav-item.active{background:var(--accent-dim);color:var(--accent);}
   .nav-icon{font-size:14px;width:18px;text-align:center;}
-  .cat-filter{border-top:1px solid var(--border);padding:10px 10px 14px;flex:1;overflow-y:auto;min-height:0;}
+  .cat-filter{border-top:1px solid var(--border);padding:10px 10px 14px;flex:1 0 auto;}
   .cat-filter-header{display:flex;align-items:center;justify-content:space-between;padding:0 8px;margin-bottom:6px;}
   .cat-manage-btn{font-size:11px;font-family:var(--mono);color:var(--text3);background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:3px;transition:color .15s;}
   .cat-manage-btn:hover{color:var(--accent);}
@@ -66,7 +73,7 @@
   .cat-tag.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
   .cat-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
 
-  .sync-status{padding:10px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;}
+  .sync-status{padding:10px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:11px;font-family:var(--mono);color:var(--text3);flex-shrink:0;position:sticky;bottom:0;background:var(--bg2);}
   .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .3s;}
   .sync-dot.ok{background:var(--accent);}
   .sync-dot.syncing{background:var(--warn);animation:pulse 1s infinite;}
@@ -104,7 +111,7 @@
   .stat-val.warn{color:var(--warn);}
 
   .alerts-panel{padding:0 24px;margin-top:16px;}
-  .alert-row{display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);margin-bottom:6px;font-size:13px;color:var(--danger-text);}
+  .alert-row{display:flex;align-items:baseline;gap:10px;padding:10px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);border-radius:var(--radius);margin-bottom:6px;font-size:13px;color:var(--danger-text);}
   .alert-warn{background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.2);color:var(--warn-text);}
 
   .update-toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--accent2);border-radius:var(--radius);padding:10px 16px;font-size:12px;font-family:var(--mono);color:var(--accent);z-index:300;opacity:0;transform:translateY(8px);transition:opacity .25s,transform .25s;pointer-events:none;}
@@ -132,7 +139,7 @@
   .qty{font-family:var(--mono);font-size:13px;}
   .qty.low{color:var(--danger);}.qty.warn{color:var(--warn);}.qty.ok{color:var(--accent);}
   .location-pill{font-family:var(--mono);font-size:11px;color:var(--text3);background:var(--bg3);padding:2px 7px;border-radius:4px;border:1px solid var(--border);white-space:nowrap;}
-  .action-btns{display:flex;gap:4px;opacity:0;transition:opacity .1s;flex-wrap:wrap;justify-content:flex-end;}
+  .action-btns{display:flex;gap:4px;opacity:0;transition:opacity .1s;justify-content:flex-end;}
   tr:hover .action-btns{opacity:1;}
 
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .6s linear infinite;}
@@ -141,14 +148,14 @@
   .empty{text-align:center;padding:60px 20px;color:var(--text3);}
   .empty-icon{font-size:40px;margin-bottom:12px;}
 
-  .notes-cell{font-size:12px;color:var(--text2);max-width:200px;}
+  .notes-cell{font-size:12px;color:var(--text2);max-width:200px;overflow-wrap:anywhere;}
   .notes-cell a{color:var(--accent);text-decoration:none;font-family:var(--mono);font-size:11px;}
   .notes-cell a:hover{text-decoration:underline;}
 
   /* ── Modals ── */
   .modal-overlay{position:fixed;inset:0;background:var(--overlay);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .15s;}
   .modal-overlay.open{opacity:1;pointer-events:all;}
-  .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:520px;max-width:95vw;max-height:90vh;overflow:auto;transform:translateY(8px);transition:transform .15s;}
+  .modal{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;width:520px;max-width:95vw;max-height:calc(100vh - 32px);overflow:auto;transform:translateY(8px);transition:transform .15s;}
   .modal-overlay.open .modal{transform:translateY(0);}
   .modal-sm{width:420px;}
   .modal-md{width:560px;}
@@ -171,8 +178,8 @@
   .close-btn:hover{color:var(--text);}
 
   /* ── BOM component picker ── */
-  .bom-picker-wrap{position:relative;flex:1;}
-  .bom-picker-display{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:5px 8px;font-size:12px;cursor:pointer;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;justify-content:space-between;gap:4px;}
+  .bom-picker-wrap{position:relative;flex:1;min-width:0;}
+  .bom-picker-display{width:100%;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);padding:5px 8px;font-size:12px;cursor:pointer;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:4px;}
   .bom-picker-display:hover{border-color:var(--border);}
   .bom-picker-display.selected-val{color:var(--text);}
   .bom-picker-dropdown{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);z-index:300;box-shadow:var(--shadow);}
@@ -186,13 +193,14 @@
   .bom-picker-opt.active{background:var(--accent-dim);color:var(--accent);}
   .bom-picker-empty{padding:12px 10px;font-size:12px;color:var(--text3);text-align:center;}
   .bom-lines{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow-y:auto;}
-  .bom-line{display:grid;grid-template-columns:1fr 80px 32px;gap:6px;align-items:center;}
+  .bom-line{display:grid;grid-template-columns:minmax(0,1fr) 70px 60px 32px;gap:6px;align-items:center;}
+  .bom-line-head{padding-bottom:4px;}
   .bom-line select{font-size:12px;padding:5px 8px;}
   .bom-line input{font-size:12px;padding:5px 8px;text-align:center;}
   .bom-remove-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;line-height:1;border-radius:4px;padding:2px 4px;transition:color .1s;width:32px;text-align:center;}
   .bom-remove-btn:hover{color:var(--danger);}
   .bom-add-btn{align-self:flex-start;}
-  .actions-col{text-align:right;min-width:120px;}
+  .actions-col{text-align:right;}
 
   /* ── BOM checkout preview ── */
   .bom-checkout-list{display:flex;flex-direction:column;gap:2px;max-height:400px;overflow-y:auto;}
@@ -248,12 +256,12 @@
   .detail-panel.closed{width:0;}
   .detail-body{padding:16px;overflow-y:auto;flex:1;min-height:0;}
   .detail-header{padding:16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0;}
-  .detail-part{font-size:12px;font-family:var(--mono);color:var(--accent);margin-bottom:4px;}
-  .detail-name{font-size:16px;font-weight:600;line-height:1.3;}
-  .detail-row{display:flex;justify-content:space-between;align-items:baseline;padding:8px 0;border-bottom:1px solid var(--border);}
+  .detail-part{font-size:12px;font-family:var(--mono);color:var(--accent);margin-bottom:4px;overflow-wrap:anywhere;}
+  .detail-name{font-size:16px;font-weight:600;line-height:1.3;overflow-wrap:anywhere;}
+  .detail-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);}
   .detail-row:last-child{border-bottom:none;}
-  .detail-key{font-size:12px;color:var(--text3);}
-  .detail-val{font-size:13px;font-family:var(--mono);text-align:right;word-break:break-all;}
+  .detail-key{font-size:12px;color:var(--text3);flex-shrink:0;}
+  .detail-val{font-size:13px;font-family:var(--mono);text-align:right;min-width:0;overflow-wrap:anywhere;}
   .detail-val a{color:var(--accent);text-decoration:none;}
   .detail-val a:hover{text-decoration:underline;}
   .detail-actions{padding:12px 16px;display:flex;gap:6px;flex-wrap:wrap;border-top:1px solid var(--border);flex-shrink:0;}
@@ -263,9 +271,9 @@
   .detail-bom-qty{font-family:var(--mono);font-size:12px;color:var(--text3);}
 
   /* ── Login screen ── */
-  .login-screen{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:1000;}
+  .login-screen{position:fixed;inset:0;background:var(--bg);display:flex;z-index:1000;overflow-y:auto;padding:max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));}
   .login-screen.hidden{display:none;}
-  .login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:36px 40px;width:360px;max-width:95vw;display:flex;flex-direction:column;gap:20px;}
+  .login-card{background:var(--bg2);border:1px solid var(--border2);border-radius:12px;padding:36px 40px;width:360px;max-width:100%;margin:auto;display:flex;flex-direction:column;gap:20px;}
   .login-brand-logo{display:block;width:200px;max-width:100%;height:auto;margin-bottom:14px;}
   .login-logo-mark{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:2px;}
   .login-logo-name{font-size:22px;font-weight:600;color:var(--text);letter-spacing:-.01em;margin-bottom:4px;}
@@ -273,13 +281,13 @@
   .login-err{font-size:12px;color:var(--danger);min-height:16px;text-align:center;}
   .login-footer{font-size:11px;color:var(--text3);text-align:center;font-family:var(--mono);}
   .login-user-badge{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);font-family:var(--mono);min-width:0;}
-  .login-user-badge #sidebar-username{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .login-user-badge #sidebar-username{overflow-wrap:anywhere;}
   .login-user-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);}
   .bom-qty-neg{color:var(--warn) !important;}
   .user-list{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto;padding-right:2px;}
   .user-item{background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:8px 10px;display:flex;flex-direction:column;gap:8px;}
   .user-row{display:flex;align-items:center;gap:10px;}
-  .user-name{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .user-name{flex:1;min-width:0;font-size:13px;overflow-wrap:anywhere;}
   .user-meta{font-size:11px;font-family:var(--mono);color:var(--text3);white-space:nowrap;}
   .user-row select{width:auto;padding:4px 8px;font-size:12px;}
   .user-pw-row{display:flex;gap:6px;align-items:center;}
@@ -294,6 +302,196 @@
   body.auth-pending .login-card{visibility:hidden;}
   .theme-toggle{font-size:13px;line-height:1;color:var(--text3);background:none;border:1px solid var(--border2);border-radius:var(--radius);cursor:pointer;padding:3px 6px;transition:color .15s,border-color .15s;}
   .theme-toggle:hover{color:var(--accent);border-color:var(--accent2);}
+  /* ── Scanning ── */
+  .scan-btn-icon{font-size:15px;line-height:1;}
+  .scan-fab{display:none;position:fixed;right:calc(16px + env(safe-area-inset-right));bottom:calc(16px + env(safe-area-inset-bottom));z-index:40;
+    align-items:center;gap:8px;padding:14px 20px;border-radius:30px;border:none;background:var(--accent);color:var(--on-accent);
+    font-family:var(--sans);font-size:15px;font-weight:600;box-shadow:var(--shadow);cursor:pointer;}
+  .scanner{position:fixed;inset:0;background:#000;z-index:400;display:none;flex-direction:column;color:#fff;}
+  .scanner.open{display:flex;}
+  .scanner video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+  .scanner-top{position:relative;display:flex;align-items:center;gap:10px;padding:calc(12px + env(safe-area-inset-top)) 14px 12px;background:linear-gradient(rgba(0,0,0,.65),transparent);}
+  .scanner-title{flex:1;font-size:15px;font-weight:600;}
+  .scanner-btn{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:22px;padding:8px 14px;font-size:14px;font-family:var(--sans);cursor:pointer;}
+  .scanner-btn.on{background:#fff;color:#000;}
+  .scanner-frame{position:relative;flex:1;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+  .scanner-window{width:min(78vw,340px);height:min(52vw,230px);border:3px solid rgba(255,255,255,.9);border-radius:14px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);}
+  .scanner-bottom{position:relative;padding:14px 16px calc(16px + env(safe-area-inset-bottom));background:linear-gradient(transparent,rgba(0,0,0,.75));display:flex;flex-direction:column;gap:10px;}
+  .scanner-hint{font-size:13px;text-align:center;color:rgba(255,255,255,.85);}
+  .scanner-hint.err{color:#fca5a5;}
+  .scanner-manual{display:flex;gap:8px;}
+  .scanner-manual input{flex:1;background:rgba(0,0,0,.5);border-color:rgba(255,255,255,.35);color:#fff;font-size:16px;}
+  .scanner-manual input::placeholder{color:rgba(255,255,255,.55);}
+  .scan-item-part{font-size:12px;font-family:var(--mono);color:var(--accent);overflow-wrap:anywhere;}
+  .scan-item-name{font-size:18px;font-weight:600;line-height:1.3;overflow-wrap:anywhere;}
+  .scan-item-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:12px;color:var(--text2);}
+  .scan-stock{display:flex;align-items:baseline;gap:8px;margin-top:4px;}
+  .scan-stock-num{font-size:30px;font-weight:600;}
+  .scan-stock-sub{font-size:12px;color:var(--text3);font-family:var(--mono);}
+  .scan-note{font-size:12px;color:var(--text2);padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);}
+  .seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--border2);border-radius:var(--radius);overflow:hidden;}
+  .seg button{background:none;border:none;border-right:1px solid var(--border2);color:var(--text2);padding:10px 4px;font-family:var(--sans);font-size:14px;font-weight:500;cursor:pointer;}
+  .seg button:last-child{border-right:none;}
+  .seg button.active{background:var(--accent-dim);color:var(--accent);}
+  .qty-stepper{display:grid;grid-template-columns:52px 1fr 52px;gap:8px;}
+  .qty-stepper button{background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:22px;cursor:pointer;}
+  .qty-stepper input{text-align:center;font-size:20px;font-family:var(--mono);padding:9px;}
+  .scan-preview{font-size:13px;font-family:var(--mono);color:var(--text2);text-align:center;}
+  .scan-list{display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto;}
+  .scan-list-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;text-align:left;color:var(--text);font-family:var(--sans);font-size:13px;width:100%;}
+  .scan-list-row:hover{border-color:var(--accent2);}
+  .scan-list-main{flex:1;min-width:0;}
+  .scan-list-sub{font-size:11px;font-family:var(--mono);color:var(--text3);overflow-wrap:anywhere;}
+  .scan-facts{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;}
+  .scan-facts dt{color:var(--text3);font-size:12px;}
+  .scan-facts dd{font-family:var(--mono);word-break:break-all;}
+  .scan-done{text-align:center;padding:10px 0;}
+  .scan-done-icon{font-size:34px;color:var(--accent);}
+  .field-with-btn{display:flex;gap:6px;}
+  .field-with-btn .btn{flex-shrink:0;}
+
+  /* ── Stock moves view ── */
+  .log-toolbar{padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg2);flex-wrap:wrap;}
+  .log-toolbar input{flex:1;max-width:300px;min-width:160px;}
+  .log-list{flex:1;overflow-y:auto;padding:20px 24px;}
+  .move-row{display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);margin-bottom:6px;}
+  .move-change{font-family:var(--mono);font-size:14px;font-weight:600;min-width:64px;text-align:right;}
+  .move-change.plus{color:var(--accent);}
+  .move-change.minus{color:var(--warn);}
+  .move-change.zero{color:var(--text3);}
+  .move-main{flex:1;min-width:0;}
+  .move-item{font-size:13px;font-weight:500;overflow-wrap:anywhere;}
+  .move-meta{font-size:11px;font-family:var(--mono);color:var(--text3);}
+  .move-after{font-family:var(--mono);font-size:12px;color:var(--text2);white-space:nowrap;}
+
+  /* ── Layout at every size ── */
+  .menu-btn{display:none;background:none;border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-size:18px;line-height:1;padding:6px 10px;cursor:pointer;}
+  .nav-backdrop{display:none;}
+  .topbar-tools{display:flex;align-items:center;gap:8px;margin-left:auto;}
+  .topbar-tools select{width:auto;padding:7px 10px;}
+  #bom-filter-select{max-width:200px;}
+  .view-chips{display:none;gap:6px;}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--bg3);
+    color:var(--text2);font-family:var(--sans);font-size:13px;white-space:nowrap;cursor:pointer;flex-shrink:0;}
+  .chip.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+  .chip-count{font-family:var(--mono);font-size:11px;}
+  .chip-count.warn{color:var(--warn);}
+  .chip .cat-dot{width:7px;height:7px;}
+  .install-tip{display:flex;align-items:center;gap:10px;margin:10px 12px 0;padding:10px 12px;background:var(--accent-dim);border:1px solid var(--accent2);
+    border-radius:var(--radius);font-size:13px;color:var(--text);}
+  .install-tip span{flex:1;}
+  button{touch-action:manipulation;}
+  /* The table gives up its least important columns as the space for it shrinks
+     (a narrow window, or the detail panel open), and turns into cards when narrow */
+  .main{container-type:inline-size;container-name:main;}
+  /* Long part numbers and locations wrap, so the name keeps room */
+  #inv-table td.c-name{min-width:170px;}
+  #inv-table td.c-part{max-width:170px;overflow-wrap:anywhere;}
+  #inv-table td.c-loc .location-pill{white-space:normal;display:inline-block;max-width:150px;overflow-wrap:anywhere;}
+  @container main (max-width:1400px){
+    #inv-table .c-notes{display:none;}
+    #inv-table .btn-text{display:none;}
+  }
+  @container main (max-width:980px){ #inv-table .c-supplier{display:none;} }
+  /* Narrower still: tapping a row opens the details, which have every action */
+  @container main (max-width:840px){
+    #inv-table .c-cat,#inv-table .c-actions,#inv-table .stock-bar{display:none;}
+    #inv-table td,#inv-table thead th{padding-left:8px;padding-right:8px;}
+    #inv-table td.c-part{max-width:140px;}
+  }
+  @container main (max-width:640px){
+    .table-wrap{padding-left:12px;padding-right:12px;}
+    #inv-table,#inv-table tbody{display:block;}
+    #inv-table thead{display:none;}
+    #inv-table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"name stock" "part loc";gap:4px 12px;
+      padding:10px 12px;margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);}
+    #inv-table tr.selected{border-color:var(--accent2);background:var(--accent-dim);}
+    #inv-table td{display:none;padding:0;}
+    #inv-table td.c-name{display:block;grid-area:name;min-width:0;overflow-wrap:anywhere;}
+    #inv-table td.c-stock{display:block;grid-area:stock;justify-self:end;}
+    #inv-table td.c-part{display:block;grid-area:part;min-width:0;overflow-wrap:anywhere;}
+    #inv-table td.c-loc{display:block;grid-area:loc;justify-self:end;align-self:start;max-width:36cqw;text-align:right;}
+    #inv-table .location-pill{white-space:normal;overflow-wrap:anywhere;display:inline-block;}
+    #inv-table .stock-bar{width:40px;display:block;}
+  }
+  @supports (height:100dvh){
+    body,.shell,.sidebar,.main,.detail-panel{height:100dvh;}
+    .modal{max-height:calc(100dvh - 32px);}
+  }
+  /* Touch screens have no hover, so row buttons are always visible */
+  @media (hover:none){ .action-btns{opacity:1;} }
+
+  /* ── Phones and small tablets ── */
+  @media (max-width:820px){
+    input,select,textarea,.search-input{font-size:16px;}  /* smaller text makes iOS zoom in on focus */
+    .menu-btn{display:inline-flex;align-self:stretch;align-items:center;}
+    .scan-fab{display:inline-flex;}
+    .scan-btn-top{display:none;}
+    .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:60;width:min(280px,85vw);transform:translateX(-100%);transition:transform .2s;
+      padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);}
+    body.nav-open .sidebar{transform:none;box-shadow:var(--shadow);}
+    body.nav-open .nav-backdrop{display:block;position:fixed;inset:0;background:var(--overlay);z-index:59;}
+    .nav-item{padding:10px 10px;font-size:14px;}
+    /* Header: menu, search and add on one line; views and sorting in a row that scrolls sideways */
+    .topbar{padding:calc(10px + env(safe-area-inset-top)) 12px 8px;gap:8px;flex-wrap:wrap;}
+    .search-wrap{min-width:0;max-width:none;flex:1 1 0;}
+    .add-btn{padding:0 14px;font-size:20px;align-self:stretch;}
+    .add-btn .btn-text{display:none;}
+    .topbar-tools{order:5;width:calc(100% + 24px);margin:0 -12px !important;padding:2px 12px;overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain;}
+    .topbar-tools::-webkit-scrollbar{display:none;}
+    /* fades at the right edge, so it's clear the row scrolls */
+    .topbar-tools{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 28px),transparent);}
+    .topbar-tools select{flex-shrink:0;font-size:14px;padding:6px 28px 6px 10px;border-radius:20px;}
+    .topbar-tools #bom-filter-select{max-width:180px;}
+    .topbar-tools label{flex-shrink:0;}
+    .view-chips{display:flex;}
+    .stats-bar,.alerts-panel{display:none !important;}   /* the chips carry the counts */
+    .table-wrap{padding:10px 12px calc(90px + env(safe-area-inset-bottom));overscroll-behavior:contain;}
+    .detail-panel,.detail-panel.closed{position:fixed;inset:0;width:100%;z-index:55;border-left:none;padding-top:env(safe-area-inset-top);transition:transform .2s;}
+    .detail-panel.closed{transform:translateX(100%);}
+    .detail-close{width:44px;height:44px;margin:-10px -10px 0 0;font-size:20px;}
+    .detail-actions{padding-bottom:calc(12px + env(safe-area-inset-bottom));}
+    .detail-actions .btn{padding:10px 12px;font-size:13px;}
+    .modal-overlay{align-items:flex-end;}
+    .modal,.modal-sm,.modal-md,.modal-bom{width:100%;max-width:100%;max-height:calc(100vh - 40px);border-radius:14px 14px 0 0;}
+    .modal-bom{overflow:auto;}
+    .modal-bom .modal-body{max-height:none;overflow:visible;}
+    .modal-footer{flex-wrap:wrap;padding-bottom:calc(14px + env(safe-area-inset-bottom));position:sticky;bottom:0;background:var(--bg2);z-index:2;}
+    .modal-footer .btn{padding:10px 14px;}
+    .modal .form-row{grid-template-columns:1fr 1fr !important;}
+    .modal .form-row.form-row-stack{grid-template-columns:1fr !important;}
+    .btn-sm{padding:7px 12px;}
+    .btn-xs{padding:5px 10px;font-size:12px;}
+    .log-toolbar{padding:10px 12px;}
+    .log-toolbar input{max-width:none;flex-basis:100%;}
+    .log-list{padding:12px 12px calc(90px + env(safe-area-inset-bottom));}
+    .hist-event-header{flex-wrap:wrap;gap:6px 10px;}
+    .hist-asm{white-space:normal;flex-basis:100%;order:3;}
+    .user-row{flex-wrap:wrap;}
+    .user-name{flex-basis:100%;}
+    .update-toast{left:16px;right:16px;bottom:calc(84px + env(safe-area-inset-bottom));text-align:center;}
+    .login-card{padding:28px 22px;}
+  }
+  @supports (height:100dvh){
+    @media (max-width:820px){
+      .modal,.modal-sm,.modal-md,.modal-bom{max-height:calc(100dvh - env(safe-area-inset-top) - 16px);}
+    }
+  }
+  /* Narrow phones: the BOM editor drops its line-cost column (the total stays),
+     and the component picker opens across the whole line */
+  @media (max-width:480px){
+    .bom-line{grid-template-columns:minmax(0,1fr) 64px 32px;}
+    .bom-line .bom-line-cost{display:none;}
+    .bom-line{position:relative;}
+    .bom-line .bom-picker-wrap{position:static;}
+    .bom-picker-search-row{flex-wrap:wrap;}
+    .bom-picker-cat{width:100%;}
+    .bom-picker-list{max-height:50vh;}
+  }
+  /* Landscape phones: keep the scan frame inside the camera view */
+  @media (max-height:500px){
+    .scanner-window{height:min(52vw,230px,38vh);}
+  }
   /* Role gating (the server enforces the same rules) */
   body[data-role="viewer"] .needs-user,
   body:not([data-role="admin"]) .needs-admin{display:none !important;}
@@ -346,7 +544,7 @@
       <img class="brand-logo" src="assets/aerolab-logo.png" alt="Aerolab" width="480" height="182">
       <div class="logo-mark">ElectoStock</div>
       <div class="logo-name">Inventory</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:8px;">
         <div class="login-user-badge"><span class="login-user-dot"></span><span id="sidebar-username"></span></div>
         <span style="display:flex;align-items:center;gap:6px;flex-shrink:0">
           <button class="theme-toggle" onclick="toggleTheme()"></button>
@@ -361,8 +559,11 @@
       <button class="nav-item" onclick="setView('bom',this)"><span class="nav-icon" style="color:var(--bom)">◈</span> Has BOM</button>
       <button class="nav-item" onclick="setView('nobom',this)"><span class="nav-icon" style="color:var(--text3)">◇</span> No BOM</button>
       <div class="nav-label">Actions</div>
+      <button class="nav-item" onclick="openScanner()"><span class="nav-icon">⌖</span> Scan</button>
       <button class="nav-item" onclick="manualSync()"><span class="nav-icon">↻</span> Sync Now</button>
       <button class="nav-item" onclick="setView('history',this)"><span class="nav-icon">⏱</span> Checkout History</button>
+      <button class="nav-item" onclick="setView('moves',this)"><span class="nav-icon">⇅</span> Stock Moves</button>
+      <button class="nav-item" onclick="openLabelModal(getFiltered().map(i => i.id))" title="Labels for the items in the current list"><span class="nav-icon">⎙</span> Print Labels</button>
       <button class="nav-item" onclick="exportCSV()"><span class="nav-icon">⤓</span> Export Inventory</button>
       <button class="nav-item" onclick="exportBOMs()"><span class="nav-icon">⤓</span> Export BOMs</button>
       <button class="nav-item" onclick="openPasswordModal()"><span class="nav-icon">⚿</span> Change Password</button>
@@ -380,31 +581,36 @@
       <span id="sync-text">Connecting…</span>
     </div>
   </aside>
+  <div class="nav-backdrop" onclick="closeNav()"></div>
 
   <!-- ══ Main ══ -->
   <div class="main">
     <div class="topbar">
+      <button class="menu-btn" onclick="openNav()" aria-label="Menu">☰</button>
       <div class="search-wrap">
         <span class="search-icon">🔍</span>
-        <input class="search-input" id="search" placeholder="Search by name, supplier part #, location…" oninput="renderTable()">
+        <input class="search-input" id="search" type="search" placeholder="Search by name, part #, location…" oninput="renderTable()">
       </div>
-      <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
-        <select id="bom-filter-select" style="width:auto;padding:7px 10px;" onchange="onBomFilterChange()">
+      <button class="btn btn-ghost scan-btn-top" onclick="openScanner()" title="Scan a barcode or QR code (a USB scanner works anywhere on the page too)"><span class="scan-btn-icon">⌖</span> Scan</button>
+      <div class="topbar-tools">
+        <div class="view-chips" id="view-chips"></div>
+        <select id="bom-filter-select" onchange="onBomFilterChange()" aria-label="Show the parts of an assembly">
           <option value="">All Items</option>
         </select>
         <label id="bom-subasm-label" style="display:none;align-items:center;gap:5px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap;">
           <input type="checkbox" id="bom-subasm-check" onchange="renderTable()" style="width:auto;cursor:pointer;accent-color:var(--accent)"/>
           Include Sub-Assemblies
         </label>
-        <select id="sort-select" style="width:auto;padding:7px 10px;" onchange="renderTable()">
+        <select id="sort-select" onchange="renderTable()" aria-label="Sort">
           <option value="name">Sort: Name</option>
           <option value="qty">Sort: Quantity</option>
-          <option value="supplier_part">Sort: Supplier Part #</option>
+          <option value="supplier_part">Sort: Part #</option>
           <option value="category">Sort: Category</option>
         </select>
-        <button class="btn btn-primary needs-user" onclick="openModal()">＋ Add Item</button>
       </div>
+      <button class="btn btn-primary needs-user add-btn" onclick="openModal()" aria-label="Add item">＋<span class="btn-text"> Add Item</span></button>
     </div>
+    <div class="install-tip" id="install-tip" style="display:none"></div>
 
     <div class="stats-bar" id="stats-bar"></div>
     <div class="alerts-panel" id="alerts-panel"></div>
@@ -415,15 +621,15 @@
       </div>
       <table id="inv-table" style="display:none">
         <thead><tr>
-          <th onclick="sortBy('supplier_part')">Supplier Part #</th>
-          <th onclick="sortBy('name')">Component Name</th>
-          <th onclick="sortBy('category')">Category</th>
-          <th onclick="sortBy('qty')">Stock</th>
-          <th class="no-sort">Location</th>
-          <th onclick="sortBy('unit_cost')">Unit Cost</th>
-          <th onclick="sortBy('supplier')">Supplier</th>
-          <th class="no-sort">Notes</th>
-          <th class="no-sort" style="text-align:right">Actions</th>
+          <th class="c-part" onclick="sortBy('supplier_part')">Supplier Part #</th>
+          <th class="c-name" onclick="sortBy('name')">Component Name</th>
+          <th class="c-cat" onclick="sortBy('category')">Category</th>
+          <th class="c-stock" onclick="sortBy('qty')">Stock</th>
+          <th class="c-loc no-sort">Location</th>
+          <th class="c-cost" onclick="sortBy('unit_cost')">Unit Cost</th>
+          <th class="c-supplier" onclick="sortBy('supplier')">Supplier</th>
+          <th class="c-notes no-sort">Notes</th>
+          <th class="c-actions no-sort" style="text-align:right">Actions</th>
         </tr></thead>
         <tbody id="inv-body"></tbody>
       </table>
@@ -436,8 +642,8 @@
 
     <!-- ══ History Panel (shown when currentView === 'history') ══ -->
     <div id="history-panel" style="display:none;flex:1;display:none;flex-direction:column;overflow:hidden;">
-      <div style="padding:14px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg2);">
-        <input id="history-search" style="flex:1;max-width:300px" placeholder="Filter by job, assembly, or component…" oninput="renderHistoryView()"/>
+      <div class="log-toolbar">
+        <input id="history-search" type="search" placeholder="Filter by job, assembly or part…" oninput="renderHistoryView()"/>
         <select id="history-assembly-filter" style="width:auto" onchange="renderHistoryView()">
           <option value="">All assemblies</option>
         </select>
@@ -445,7 +651,7 @@
         <button class="btn btn-ghost btn-sm" onclick="exportHistoryCSV()">⤓ Export CSV</button>
         <span id="history-count" style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:4px"></span>
       </div>
-      <div style="flex:1;overflow-y:auto;padding:20px 24px;" id="history-list-wrap">
+      <div class="log-list" id="history-list-wrap">
         <div id="history-loading" style="display:none;text-align:center;padding:60px;color:var(--text3);font-family:var(--mono);font-size:13px;">
           <div class="spinner" style="margin:0 auto 12px"></div>Loading checkout history…
         </div>
@@ -457,11 +663,81 @@
         <div id="history-list"></div>
       </div>
     </div>
+
+    <!-- ══ Stock Moves Panel (shown when currentView === 'moves') ══ -->
+    <div id="moves-panel" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+      <div class="log-toolbar">
+        <input id="moves-search" type="search" placeholder="Filter by item, person or note…" oninput="renderMovesView()"/>
+        <button class="btn btn-ghost btn-sm" onclick="loadMoves()">↻ Refresh</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportMovesCSV()">⤓ Export CSV</button>
+        <span id="moves-count" style="font-size:11px;color:var(--text3);font-family:var(--mono);margin-left:4px"></span>
+      </div>
+      <div class="log-list">
+        <div id="moves-status" style="text-align:center;padding:60px;color:var(--text3);font-size:13px;"></div>
+        <div id="moves-list"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ══ Detail Panel ══ -->
   <div class="detail-panel closed" id="detail-panel">
     <div id="detail-content" style="display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;"></div>
+  </div>
+  <button class="scan-fab" onclick="openScanner()"><span class="scan-btn-icon">⌖</span> Scan</button>
+</div>
+
+<!-- ══ Camera scanner ══ -->
+<div class="scanner" id="scanner">
+  <video id="scanner-video" playsinline muted autoplay></video>
+  <div class="scanner-top">
+    <span class="scanner-title">Scan a label</span>
+    <button class="scanner-btn" id="scanner-torch" style="display:none" onclick="toggleTorch()">Light</button>
+    <button class="scanner-btn" onclick="closeScanner()">Close</button>
+  </div>
+  <div class="scanner-frame"><div class="scanner-window"></div></div>
+  <div class="scanner-bottom">
+    <div class="scanner-hint" id="scanner-hint">Starting the camera…</div>
+    <form class="scanner-manual" onsubmit="event.preventDefault();submitManualScan()">
+      <input id="scanner-manual" type="text" placeholder="Or type a part # or code" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="go"/>
+      <button class="scanner-btn" type="submit">Find</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══ Scan result ══ -->
+<div class="modal-overlay" id="scan-modal" onclick="if(event.target.id==='scan-modal')closeScanSheet()">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title" id="scan-title">Scanned</div>
+      <button class="close-btn" onclick="closeScanSheet()">✕</button>
+    </div>
+    <div class="modal-body" id="scan-body"></div>
+    <div class="modal-footer" id="scan-footer"></div>
+  </div>
+</div>
+
+<!-- ══ Label printing ══ -->
+<div class="modal-overlay" id="label-modal" onclick="if(event.target.id==='label-modal')closeLabelModal()">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <div class="modal-title">Print Labels</div>
+      <button class="close-btn" onclick="closeLabelModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="label-count" style="font-size:13px;color:var(--text2)"></div>
+      <div class="form-group"><label class="form-label" for="label-size">Label stock</label>
+        <select id="label-size">
+          <option value="roll">Label printer, 2.25 × 1.25 in</option>
+          <option value="sheet">Letter sheet, 30 labels</option>
+        </select>
+      </div>
+      <div style="font-size:12px;color:var(--text3)">The label printer size fits DYMO 30334 labels, and the sheet fits Avery 5160 / 8160. Each label has a QR code for the item. Scanning it here, or with the phone's own camera app, opens the item ready to check in or out. Print at 100% scale ("Actual size").</div>
+      <span class="modal-err" id="label-err"></span>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeLabelModal()">Cancel</button>
+      <button class="btn btn-primary" id="label-print-btn" onclick="printLabels()">⎙ Print</button>
+    </div>
   </div>
 </div>
 
@@ -474,7 +750,7 @@
     </div>
     <div class="modal-body">
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Part Number</label><input id="f-part" placeholder="Internal part # (optional)"/></div>
+        <div class="form-group"><label class="form-label">Part Number</label><input id="f-part" placeholder="Optional"/></div>
         <div class="form-group"><label class="form-label">Category *</label><select id="f-cat"></select></div>
       </div>
       <div class="form-group"><label class="form-label">Component Name *</label><input id="f-name" placeholder="e.g. 10kΩ Resistor 0805 1%"/></div>
@@ -489,6 +765,12 @@
       <div class="form-row">
         <div class="form-group"><label class="form-label">Supplier</label><input id="f-supplier" placeholder="e.g. Digi-Key"/></div>
         <div class="form-group"><label class="form-label">Supplier Part #</label><input id="f-supplier-part" placeholder="e.g. 311-10KARCT-ND"/></div>
+      </div>
+      <div class="form-group"><label class="form-label" for="f-barcode">Barcode</label>
+        <div class="field-with-btn">
+          <input id="f-barcode" placeholder="Optional" autocomplete="off" spellcheck="false"/>
+          <button class="btn btn-ghost" type="button" onclick="scanIntoField('f-barcode')" title="Scan with the camera">⌖ Scan</button>
+        </div>
       </div>
       <div class="form-group"><label class="form-label">Notes</label><textarea id="f-notes" placeholder="Datasheet URL, specifications…"></textarea></div>
     </div>
@@ -513,9 +795,9 @@
       <div class="form-row">
         <div class="form-group"><label class="form-label">Action</label>
           <select id="adj-action">
-            <option value="add">Check In (Add)</option>
-            <option value="remove">Check Out (Remove)</option>
-            <option value="set">Set Exact</option>
+            <option value="add">Check In</option>
+            <option value="remove">Check Out</option>
+            <option value="set">Set Count</option>
           </select>
         </div>
         <div class="form-group"><label class="form-label">Quantity</label><input id="adj-qty" type="number" min="0" value="1"/></div>
@@ -546,10 +828,10 @@
         Nested BOMs are resolved automatically at checkout.
       </div>
       <!-- Column headers -->
-      <div style="display:grid;grid-template-columns:1fr 70px 60px 32px;gap:6px;padding:0 0 4px;">
+      <div class="bom-line bom-line-head">
         <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em">Component</span>
         <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;text-align:center">Qty</span>
-        <span style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;text-align:right">Line Cost</span>
+        <span class="bom-line-cost" style="font-size:11px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;text-align:right">Line Cost</span>
         <span></span>
       </div>
       <div class="bom-lines" id="bom-lines"></div>
@@ -576,7 +858,7 @@
       <button class="close-btn" onclick="closeBomCheckout()">✕</button>
     </div>
     <div class="modal-body">
-      <div class="form-row" style="grid-template-columns:80px 2fr 1fr;align-items:end">
+      <div class="form-row" style="grid-template-columns:120px 2fr 1fr;align-items:end">
         <div class="form-group">
           <label class="form-label">Qty</label>
           <div style="display:flex;align-items:center;gap:5px">
@@ -621,7 +903,7 @@
       </div>
       <div style="border-top:1px solid var(--border);padding-top:14px;display:flex;flex-direction:column;gap:10px;">
         <div class="cat-section-label">Invite Someone</div>
-        <div class="form-row">
+        <div class="form-row form-row-stack">
           <div class="form-group"><label class="form-label" for="new-user-email">Email</label>
             <input id="new-user-email" type="email" placeholder="name@example.com" autocomplete="off" spellcheck="false"/></div>
           <div class="form-group"><label class="form-label" for="new-user-role">Role</label>
@@ -701,6 +983,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"
   integrity="sha384-K1nraABOP/zFehpLIUksXebbs7jMpB8gYMlb+uhVKZcWT/9Vkq1+qhv6ndC+1Yuz" crossorigin="anonymous"></script>
+<script src="assets/scan-codes.js"></script>
 <script>
 // ╔══════════════════════════════════════════════════════════╗
 //  CONFIG — the only section you need to edit
@@ -765,7 +1048,7 @@ let historyEntries = [];
 // Permissions are enforced by row-level security in the database.
 
 const num = v => Number(v) || 0;
-const ITEM_FIELDS = ['part', 'name', 'category', 'qty', 'min', 'location', 'unit_cost', 'supplier', 'supplier_part', 'notes'];
+const ITEM_FIELDS = ['part', 'name', 'category', 'qty', 'min', 'location', 'unit_cost', 'supplier', 'supplier_part', 'barcode', 'notes'];
 
 function toItem(r) {
   return { ...r, qty: num(r.qty), min: num(r.min), unit_cost: num(r.unit_cost) };
@@ -785,7 +1068,8 @@ function ok({ data, error }) {
     showLogin('Your session has ended. Please sign in again.');
   }
   const message =
-      error.code === '23505' ? 'That already exists.'
+      error.code === '23505' && /barcode/.test(error.message) ? 'That barcode is already on another item.'
+    : error.code === '23505' ? 'That already exists.'
     : error.code === '42501' || /row-level security/i.test(error.message) ? 'Your role is not allowed to do that.'
     : error.code === 'PGRST116' ? 'Not found, or your role is not allowed to change it.'
     : error.message;
@@ -827,8 +1111,14 @@ const ACTIONS = {
     changed(ok(await sb.from('items').delete().eq('id', id).select('id')), 'Item');
     return { cost_updates: [] };
   },
-  async adjustQty({ id, action, qty }) {
-    return { newQty: num(ok(await sb.rpc('adjust_qty', { p_id: id, p_action: action, p_qty: qty }))) };
+  // Logged in stock_moves with the note, the user and the actual change
+  async adjustQty({ id, action, qty, note = '' }) {
+    return { newQty: num(ok(await sb.rpc('adjust_stock', { p_id: id, p_action: action, p_qty: qty, p_note: note }))) };
+  },
+  async getStockMoves({ limit = 300 } = {}) {
+    const rows = ok(await sb.from('stock_moves').select('*')
+      .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(limit));
+    return { entries: rows.map(r => ({ ...r, qty_requested: num(r.qty_requested), qty_change: num(r.qty_change), qty_after: num(r.qty_after) })) };
   },
   async checkout({ assembly_id, qty_built, job_name }) {
     const r = ok(await sb.rpc('checkout', { p_assembly_id: assembly_id, p_qty_built: qty_built, p_job_name: job_name }));
@@ -1027,6 +1317,7 @@ async function syncAll(silent = false) {
       document.getElementById('inv-table').style.display = 'table';
     }
     if (selectedId) renderDetail(selectedId);
+    openPendingItem();  // a label link the page was opened with
     // Keep an open checkout preview in step with the fresh stock levels
     if (bomCoData && document.getElementById('bom-checkout-modal').classList.contains('open')) {
       refreshBomCheckoutPreview(bomCoData.parentId);
@@ -1168,12 +1459,12 @@ function getFiltered() {
       if (currentView === 'low')     return i.min > 0 && i.qty <= i.min;
       if (currentView === 'bom')     return hasBom(i.id);
       if (currentView === 'nobom')   return !hasBom(i.id);
-      if (currentView === 'history') return false;
+      if (LOG_VIEWS.includes(currentView)) return false;
       return true;
     })
     .filter(i => bomMemberIds ? bomMemberIds.has(i.id) : true)
     .filter(i => activeCats.size > 0 ? activeCats.has(i.category) : true)
-    .filter(i => !q || (i.name+(i.supplier_part||'')+i.category+(i.location||'')+(i.supplier||'')).toLowerCase().includes(q))
+    .filter(i => !q || [i.name,i.supplier_part,i.part,i.barcode,i.category,i.location,i.supplier].join(' ').toLowerCase().includes(q))
     .sort((a,b) => {
       const av = a[sortCol]??'', bv = b[sortCol]??'';
       return (typeof av==='string' ? av.localeCompare(bv) : av-bv) * sortDir;
@@ -1186,17 +1477,18 @@ function sortBy(col) {
   renderTable();
 }
 
+// Views that replace the inventory list with a log
+const LOG_VIEWS = ['history', 'moves'];
+
 function setView(v, el) {
   currentView = v;
   document.querySelectorAll('.nav-item').forEach(x => x.classList.remove('active'));
   if (el) el.classList.add('active');
-  if (v === 'history') {
-    showHistoryPanel();
-    loadHistory();
-  } else {
-    hideHistoryPanel();
-    renderTable();
-  }
+  showLogPanel(v);
+  renderViewChips();
+  if (v === 'history') loadHistory();
+  else if (v === 'moves') loadMoves();
+  else renderTable();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1215,9 +1507,9 @@ function renderAlerts() {
   const p = document.getElementById('alerts-panel');
   let h='';
   inventory.filter(i=>i.qty===0&&i.min>0).slice(0,2)
-    .forEach(i=>h+=`<div class="alert-row">⊗ <b>${i.name}</b> — out of stock (${i.location||'no location'})</div>`);
+    .forEach(i=>h+=`<div class="alert-row"><span>⊗</span><span><b>${i.name}</b> — out of stock (${i.location||'no location'})</span></div>`);
   inventory.filter(i=>i.min>0&&i.qty>0&&i.qty<i.min).slice(0,3)
-    .forEach(i=>h+=`<div class="alert-row alert-warn">⚠ <b>${i.name}</b> — ${i.qty} left (min: ${i.min})</div>`);
+    .forEach(i=>h+=`<div class="alert-row alert-warn"><span>⚠</span><span><b>${i.name}</b> — ${i.qty} left (min: ${i.min})</span></div>`);
   p.innerHTML=h; p.style.display=h?'block':'none';
 }
 
@@ -1231,9 +1523,34 @@ function renderCatTags() {
     const btn=document.createElement('button');
     btn.className='cat-tag'+(activeCats.has(cat)?' active':'');
     btn.innerHTML=`<span class="cat-dot" style="background:${catColor(cat)}"></span>${cat}`;
-    btn.onclick=()=>{if(activeCats.has(cat))activeCats.delete(cat);else activeCats.add(cat);renderCatTags();renderTable();};
+    btn.onclick=()=>toggleCategory(cat);
     container.appendChild(btn);
   });
+}
+
+function toggleCategory(cat) {
+  if (activeCats.has(cat)) activeCats.delete(cat); else activeCats.add(cat);
+  renderCatTags(); renderTable(); renderViewChips();
+}
+
+// Phones: the views and any category filters as chips above the list (the
+// sidebar with the same controls is tucked away in the menu there)
+const VIEW_CHIPS = [['all', 'All'], ['low', 'Low stock'], ['bom', 'Has BOM'], ['nobom', 'No BOM']];
+
+function renderViewChips() {
+  const low = inventory.filter(i => i.min > 0 && i.qty <= i.min).length;
+  const counts = { all: inventory.length, low };
+  // Category filters first, so it's visible that one is on
+  document.getElementById('view-chips').innerHTML =
+    [...activeCats].map(c => `<button type="button" class="chip active" data-cat="${escapeHtml(c)}" onclick="toggleCategory(this.dataset.cat)" title="Stop filtering by ${escapeHtml(c)}">
+        <span class="cat-dot" style="background:${catColor(c)}"></span>${escapeHtml(c)} ✕</button>`).join('')
+    + VIEW_CHIPS.map(([v, label]) =>
+      `<button type="button" class="chip${currentView === v ? ' active' : ''}" onclick="setViewByName('${v}')">${label}${
+        counts[v] !== undefined ? ` <span class="chip-count${v === 'low' && low ? ' warn' : ''}">${counts[v]}</span>` : ''}</button>`).join('');
+}
+
+function setViewByName(v) {
+  setView(v, document.querySelector(`.nav-item[onclick^="setView('${v}'"]`));
 }
 
 function renderCatSelect() {
@@ -1258,34 +1575,34 @@ function renderTable() {
       ?`<div class="notes-cell">${linkifyNotes(item.notes)}</div>`
       :'<span style="color:var(--text3)">—</span>';
     return `<tr onclick="selectRow(${item.id})" data-id="${item.id}" class="${selectedId===item.id?'selected':''}">
-      <td class="mono">${item.supplier_part||'—'}</td>
-      <td style="font-weight:500">${item.name}${bomBadge}</td>
-      <td><span class="badge badge-cat"><span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>${item.category}</span></td>
-      <td><div class="stock-bar-wrap">
+      <td class="mono c-part">${item.supplier_part||item.part||'—'}</td>
+      <td class="c-name" style="font-weight:500">${item.name}${bomBadge}</td>
+      <td class="c-cat"><span class="badge badge-cat"><span style="width:7px;height:7px;border-radius:50%;background:${col};display:inline-block;flex-shrink:0"></span>${item.category}</span></td>
+      <td class="c-stock"><div class="stock-bar-wrap">
         <span class="qty ${qc}">${Number(item.qty).toLocaleString()}</span>
         <div class="stock-bar"><div class="stock-fill" style="width:${pct}%;background:${fill}"></div></div>
       </div></td>
-      <td><span class="location-pill">${item.location||'—'}</span></td>
-      <td class="mono">${hasBom(item.id)
+      <td class="c-loc"><span class="location-pill">${item.location||'—'}</span></td>
+      <td class="mono c-cost">${hasBom(item.id)
         ? `<span style="color:var(--accent)" title="Calculated from BOM">${fmtMoney(calcBomCost(item.id),3)}</span>`
         : `${fmtMoney(Number(item.unit_cost||0),3)}`
       }</td>
-      <td style="color:var(--text2)">${item.supplier||'—'}</td>
-      <td>${notesHtml}</td>
-      <td class="actions-col"><div class="action-btns">
+      <td class="c-supplier" style="color:var(--text2)">${item.supplier||'—'}</td>
+      <td class="c-notes">${notesHtml}</td>
+      <td class="actions-col c-actions"><div class="action-btns">
         ${hasBom(item.id)
-          ? `<button class="btn btn-warn btn-sm needs-user" onclick="openBomCheckout(${item.id},event)">↑ BOM Out</button>
-             <button class="btn btn-ghost btn-sm needs-user" onclick="openAdj(${item.id},event)">± Adjust</button>`
-          : `<button class="btn btn-ghost btn-sm needs-user" onclick="openAdj(${item.id},event)">± Adjust</button>`}
-        <button class="btn btn-ghost btn-sm needs-user" onclick="openEditModal(${item.id},event)">Edit</button>
-        <button class="btn btn-ghost btn-sm needs-admin" style="color:var(--danger)" onclick="deleteItem(${item.id},event)">Del</button>
+          ? `<button class="btn btn-warn btn-sm needs-user" title="BOM checkout" onclick="openBomCheckout(${item.id},event)">↑<span class="btn-text"> BOM Out</span></button>
+             <button class="btn btn-ghost btn-sm needs-user" title="Adjust stock" onclick="openAdj(${item.id},event)">±<span class="btn-text"> Adjust</span></button>`
+          : `<button class="btn btn-ghost btn-sm needs-user" title="Adjust stock" onclick="openAdj(${item.id},event)">±<span class="btn-text"> Adjust</span></button>`}
+        <button class="btn btn-ghost btn-sm needs-user" title="Edit" onclick="openEditModal(${item.id},event)">✎<span class="btn-text"> Edit</span></button>
+        <button class="btn btn-ghost btn-sm needs-admin" title="Delete" style="color:var(--danger)" onclick="deleteItem(${item.id},event)">✕<span class="btn-text"> Del</span></button>
       </div></td>
     </tr>`;
   }).join('');
 }
 
 function render() {
-  renderStats(); renderAlerts(); renderCatTags(); renderCatSelect(); renderBomFilterSelect(); renderTable();
+  renderStats(); renderAlerts(); renderCatTags(); renderCatSelect(); renderBomFilterSelect(); renderViewChips(); renderTable();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1331,9 +1648,11 @@ function renderDetail(id) {
     <div class="detail-header"><div>
       <div class="detail-part">${i.supplier_part||i.part||'—'}</div>
       <div class="detail-name">${i.name}</div>
-    </div><button class="close-btn" onclick="selectRow(${id})">✕</button></div>
+    </div><button class="close-btn detail-close" onclick="selectRow(${id})" aria-label="Close">✕</button></div>
     <div class="detail-body">
-      <div class="detail-section">Stock</div>
+      <div class="detail-section" style="display:flex;justify-content:space-between;align-items:baseline">
+        <span>Stock</span><button class="link-btn" style="font-size:11px" onclick="showMovesFor(${id})">History ›</button>
+      </div>
       <div class="detail-row"><span class="detail-key">Quantity</span><span class="detail-val" style="color:${i.min>0&&i.qty<i.min?'var(--warn)':'var(--accent)'}">${Number(i.qty).toLocaleString()}</span></div>
       <div class="detail-row"><span class="detail-key">Min Level</span><span class="detail-val">${i.min}</span></div>
       <div class="detail-row"><span class="detail-key">Stock %</span><span class="detail-val">${pct}%</span></div>
@@ -1348,6 +1667,8 @@ function renderDetail(id) {
       <div class="detail-section">Supplier</div>
       <div class="detail-row"><span class="detail-key">Name</span><span class="detail-val">${i.supplier||'—'}</span></div>
       <div class="detail-row"><span class="detail-key">Part #</span><span class="detail-val">${i.supplier_part||'—'}</span></div>
+      ${i.part?`<div class="detail-row"><span class="detail-key">Internal Part #</span><span class="detail-val">${i.part}</span></div>`:''}
+      ${i.barcode?`<div class="detail-row"><span class="detail-key">Barcode</span><span class="detail-val">${escapeHtml(i.barcode)}</span></div>`:''}
       ${bomHtml}${renderWhereUsed(id)}${notesHtml}
     </div>
     <div class="detail-actions">
@@ -1358,6 +1679,8 @@ function renderDetail(id) {
       ${hasBom(id)?`<button class="btn btn-ghost btn-sm" onclick="printPickList(${id})">⎙ Pick List</button>`:''}
       <button class="btn btn-ghost btn-sm needs-user" onclick="openBomEditor(${id})">◈ BOM</button>
       <button class="btn btn-ghost btn-sm needs-user" onclick="openEditModal(${id},null)">Edit</button>
+      <button class="btn btn-ghost btn-sm" onclick="openLabelModal([${id}])">⎙ Label</button>
+      <button class="btn btn-ghost btn-sm needs-admin" style="color:var(--danger)" onclick="deleteItem(${id},null)">✕ Delete</button>
     </div>`;
 }
 
@@ -1392,7 +1715,7 @@ function openModal() {
   document.getElementById('modal-title').textContent = 'Add Component';
   document.getElementById('modal-save').textContent  = 'Add Item';
   document.getElementById('modal-err').textContent   = '';
-  ['part','name','qty','min','loc','cost','supplier','supplier-part','notes']
+  ['part','name','qty','min','loc','cost','supplier','supplier-part','barcode','notes']
     .forEach(f => { const e = document.getElementById('f-'+f); if (e) e.value = ''; });
   document.getElementById('modal-copy-btn').style.display = 'none';
   renderCatSelect();
@@ -1416,6 +1739,7 @@ function openEditModal(id, e) {
   document.getElementById('f-cost').value          = i.unit_cost     || 0;
   document.getElementById('f-supplier').value      = i.supplier      || '';
   document.getElementById('f-supplier-part').value = i.supplier_part || '';
+  document.getElementById('f-barcode').value       = i.barcode       || '';
   document.getElementById('f-notes').value         = i.notes         || '';
   document.getElementById('modal-copy-btn').style.display = 'inline-flex';
   editBaseline = readItemForm();
@@ -1439,6 +1763,7 @@ function copyAsNew() {
     document.getElementById('f-name').value = 'Copy of ' + currentName;
   }
   document.getElementById('f-qty').value = 0;
+  document.getElementById('f-barcode').value = ''; // a barcode belongs to one item
 }
 
 // Form values as they would be saved. editBaseline holds this snapshot from
@@ -1456,6 +1781,7 @@ function readItemForm() {
     unit_cost:parseFloat(document.getElementById('f-cost').value)||0,
     supplier:document.getElementById('f-supplier').value.trim(),
     supplier_part:document.getElementById('f-supplier-part').value.trim(),
+    barcode:document.getElementById('f-barcode').value.trim(),
     notes:document.getElementById('f-notes').value.trim(),
   };
 }
@@ -1520,10 +1846,11 @@ function closeAdjModal(){document.getElementById('adj-modal').classList.remove('
 async function applyAdjust() {
   const qty=parseInt(document.getElementById('adj-qty').value)||0;
   const action=document.getElementById('adj-action').value;
+  const note=document.getElementById('adj-note').value.trim();
   const btn=document.getElementById('adj-save');
   btn.disabled=true;btn.innerHTML='<div class="spinner"></div>';
   try {
-    const r=await api('adjustQty',{id:adjId,action,qty});
+    const r=await api('adjustQty',{id:adjId,action,qty,note});
     const idx=inventory.findIndex(x=>x.id===adjId);
     if(idx>=0){
       const c=inventory[idx].qty;
@@ -1566,12 +1893,12 @@ function renderBomLines() {
   container.innerHTML = lines.map((line, idx) => {
     const child = inventory.find(i => i.id === line.child_id);
     const displayName = child ? child.name + (child.supplier_part ? ' (' + child.supplier_part + ')' : '') : '— Select component —';
-    const costStr = `<span id="bom-cost-${idx}" style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">${bomLineCostLabel(line)}</span>`;
-    return `<div class="bom-line" id="bom-line-${idx}" style="grid-template-columns:1fr 70px 60px 32px">
+    const costStr = `<span id="bom-cost-${idx}" class="bom-line-cost" style="font-size:11px;color:var(--text3);font-family:var(--mono);white-space:nowrap">${bomLineCostLabel(line)}</span>`;
+    return `<div class="bom-line" id="bom-line-${idx}">
       <div class="bom-picker-wrap" id="picker-wrap-${idx}">
         <button class="bom-picker-display${child ? ' selected-val' : ''}" id="picker-btn-${idx}"
           onclick="toggleBomPicker(${idx},event)">
-          <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${displayName}</span>
+          <span style="min-width:0;overflow-wrap:anywhere">${displayName}</span>
           <span style="flex-shrink:0;color:var(--text3);font-size:10px">▾</span>
         </button>
         <div class="bom-picker-dropdown" id="picker-drop-${idx}" style="display:none">
@@ -1661,7 +1988,7 @@ function filterBomPicker(idx) {
     return `<div class="bom-picker-opt${isActive ? ' active' : ''}"
       onclick="selectBomPickerItem(${idx},${item.id},event)">
       ${catDot}
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.name}${item.supplier_part ? ' <span style="color:var(--text3)">(' + item.supplier_part + ')</span>' : ''}</span>
+      <span style="flex:1;min-width:0;overflow-wrap:anywhere">${item.name}${item.supplier_part ? ' <span style="color:var(--text3)">(' + item.supplier_part + ')</span>' : ''}</span>
       ${costLabel}
     </div>`;
   }).join('');
@@ -2068,19 +2395,15 @@ async function removeCategory(idx,name,e) {
 //  Checkout History
 // ══════════════════════════════════════════════════════════
 
-function showHistoryPanel() {
-  document.getElementById('history-panel').style.cssText = 'display:flex;flex-direction:column;flex:1;overflow:hidden;';
-  document.getElementById('stats-bar').style.display    = 'none';
-  document.getElementById('alerts-panel').style.display = 'none';
-  document.querySelector('.table-wrap').style.display   = 'none';
-  document.getElementById('detail-panel').classList.add('closed');
-}
-
-function hideHistoryPanel() {
-  document.getElementById('history-panel').style.display = 'none';
-  document.getElementById('stats-bar').style.display     = '';
-  document.getElementById('alerts-panel').style.display  = '';
-  document.querySelector('.table-wrap').style.display    = '';
+// Show the panel for a log view ('history' or 'moves'), or the inventory list
+function showLogPanel(view) {
+  const isLog = LOG_VIEWS.includes(view);
+  document.getElementById('history-panel').style.display = view === 'history' ? 'flex' : 'none';
+  document.getElementById('moves-panel').style.display   = view === 'moves'   ? 'flex' : 'none';
+  document.getElementById('stats-bar').style.display     = isLog ? 'none' : '';
+  document.getElementById('alerts-panel').style.display  = isLog ? 'none' : '';
+  document.querySelector('.table-wrap').style.display    = isLog ? 'none' : '';
+  if (isLog) { selectedId = null; document.getElementById('detail-panel').classList.add('closed'); }
 }
 
 async function loadHistory() {
@@ -2352,7 +2675,7 @@ function writePickListToWindow(w, parentId, qty, merged) {
 }
 
 function exportCSV() {
-  const cols=['supplier_part','name','category','qty','min','location','unit_cost','supplier','part','notes'];
+  const cols=['supplier_part','name','category','qty','min','location','unit_cost','supplier','part','notes','barcode'];
   const csv=[cols.join(','),...inventory.map(i=>cols.map(c=>'"'+(i[c]||'').toString().replace(/"/g,'""')+'"').join(','))].join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='electronics_inventory.csv';a.click();
 }
@@ -2695,6 +3018,792 @@ async function inviteUser() {
 }
 
 // ══════════════════════════════════════════════════════════
+//  Phones: the sidebar is a drawer
+// ══════════════════════════════════════════════════════════
+function openNav()  { document.body.classList.add('nav-open'); }
+function closeNav() { document.body.classList.remove('nav-open'); }
+document.querySelector('.sidebar').addEventListener('click', e => { if (e.target.closest('.nav-item')) closeNav(); });
+
+const phoneQuery = matchMedia('(max-width:820px)');
+
+// Placeholders short enough for the field at each size
+function fitPlaceholders() {
+  document.getElementById('search').placeholder = phoneQuery.matches ? 'Search items' : 'Search by name, part #, location…';
+}
+phoneQuery.addEventListener('change', () => { fitPlaceholders(); showInstallTip(); });
+fitPlaceholders();
+
+// Phones: suggest installing the app until it's installed or the tip is dismissed.
+// Android's Chrome offers an install prompt; Safari on iPhone needs Share > Add to Home Screen.
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; showInstallTip(); });
+window.addEventListener('appinstalled', () => { installPrompt = null; showInstallTip(); });
+
+function isInstalled() {
+  return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+
+function showInstallTip() {
+  const tip = document.getElementById('install-tip');
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('electostock_install_tip') === 'dismissed'; } catch (e) {}
+  const iOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const close = '<button class="close-btn" onclick="dismissInstallTip()" aria-label="Dismiss">✕</button>';
+  if (dismissed || isInstalled() || !phoneQuery.matches || !sessionToken || !(installPrompt || iOS)) { tip.style.display = 'none'; return; }
+  tip.innerHTML = installPrompt
+    ? `<span>Install ElectoStock as an app on this phone.</span><button class="btn btn-primary btn-sm" onclick="installApp()">Install</button>${close}`
+    : `<span>Install as an app: tap <b>Share</b>, then <b>Add to Home Screen</b>.</span>${close}`;
+  tip.style.display = 'flex';
+}
+
+async function installApp() {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  try { await installPrompt.userChoice; } catch (e) {}
+  installPrompt = null;
+  showInstallTip();
+}
+
+function dismissInstallTip() {
+  try { localStorage.setItem('electostock_install_tip', 'dismissed'); } catch (e) {}
+  document.getElementById('install-tip').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════
+//  Libraries loaded on first use (pinned, with SRI hashes)
+// ══════════════════════════════════════════════════════════
+const LIBS = {
+  // Barcode Detection API on ZXing (WebAssembly), for browsers without a built-in
+  // detector, such as Safari on iPhone. It fetches its .wasm from jsDelivr.
+  barcode: { src: 'https://cdn.jsdelivr.net/npm/barcode-detector@3.2.2/dist/iife/ponyfill.js',
+             integrity: 'sha384-KJVUIUGb4pmfpWXfD8j3y9ARn6KoGC2vPC/wNUX1O1ZkYemh0BsuvsmdEU2+wS7O' },
+  // QR codes for printed labels
+  qrcode:  { src: 'https://cdn.jsdelivr.net/npm/qrcode-generator@2.0.4/dist/qrcode.js',
+             integrity: 'sha384-e9EFD6BGC90bkW9aDV5xbbBfzwN7G8YImHao2lfLVKV/hPB0E0go+H3I64h7oHtA' },
+};
+const libLoads = {};
+
+function loadLib(name) {
+  if (!libLoads[name]) libLoads[name] = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = LIBS[name].src;
+    s.integrity = LIBS[name].integrity;
+    s.crossOrigin = 'anonymous';
+    s.onload = resolve;
+    s.onerror = () => { delete libLoads[name]; s.remove(); reject(new Error('Could not load the ' + name + ' library. Check the connection and try again.')); };
+    document.head.appendChild(s);
+  });
+  return libLoads[name];
+}
+
+// ══════════════════════════════════════════════════════════
+//  Camera scanner
+// ══════════════════════════════════════════════════════════
+const SCAN_FORMATS = ['qr_code', 'data_matrix', 'code_128', 'code_39', 'code_93', 'ean_13', 'ean_8',
+                      'upc_a', 'upc_e', 'itf', 'codabar', 'pdf417', 'aztec'];
+let scanDetector = null;
+let scanStream   = null;
+let scanTimer    = null;
+let scanTarget   = null;   // null: look the code up; otherwise the id of an input to fill in
+let torchOn      = false;
+
+// Android's Chrome has a built-in detector; Safari on iPhone doesn't, so it gets ZXing
+async function getDetector() {
+  if (scanDetector) return scanDetector;
+  if ('BarcodeDetector' in window) {
+    try {
+      const supported = await BarcodeDetector.getSupportedFormats();
+      if (supported.includes('qr_code') && supported.includes('data_matrix')) {
+        scanDetector = new BarcodeDetector({ formats: SCAN_FORMATS.filter(f => supported.includes(f)) });
+        return scanDetector;
+      }
+    } catch (e) { /* fall back to ZXing */ }
+  }
+  await loadLib('barcode');
+  scanDetector = new BarcodeDetectionAPI.BarcodeDetector({ formats: SCAN_FORMATS });
+  return scanDetector;
+}
+
+function setScanHint(text, isError) {
+  const el = document.getElementById('scanner-hint');
+  el.textContent = text;
+  el.classList.toggle('err', !!isError);
+}
+
+function cameraErrorMessage(e) {
+  const iPhone = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  if (e.name === 'NotAllowedError') return iPhone
+    ? 'Camera access is off. Allow it in Settings > Apps > Safari > Camera (or tap "aA" in the address bar > Website Settings), then try again.'
+    : 'Camera access is blocked. Allow the camera for this site (the icon by the address), then try again.';
+  if (e.name === 'NotFoundError' || e.name === 'OverconstrainedError') return 'No camera found. Type the code below, or use a handheld scanner.';
+  if (e.name === 'NotReadableError') return 'Another app is using the camera. Close it and try again.';
+  return 'Could not start the camera: ' + e.message;
+}
+
+async function openScanner(target = null) {
+  scanTarget = target;
+  closeNav();
+  if (!target) closeScanSheet();
+  const el = document.getElementById('scanner');
+  el.classList.add('open');
+  document.getElementById('scanner-manual').value = '';
+  document.querySelector('.scanner-title').textContent = target ? 'Scan the code to use' : 'Scan a label';
+  document.getElementById('scanner-torch').style.display = 'none';
+  setScanHint('Starting the camera…');
+  const detectorReady = getDetector();     // loads while the camera starts
+  detectorReady.catch(() => {});           // reported below, once awaited
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setScanHint("This browser can't use the camera here. Type the code below, or use a handheld scanner.", true);
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: false,
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } });
+  } catch (e) {
+    setScanHint(cameraErrorMessage(e), true);
+    return;
+  }
+  if (!el.classList.contains('open')) { stream.getTracks().forEach(t => t.stop()); return; } // closed while asking
+  stopCamera();
+  scanStream = stream;
+  const video = document.getElementById('scanner-video');
+  video.srcObject = stream;
+  try { await video.play(); } catch (e) { /* autoplay; muted + playsinline normally allow it */ }
+  const track = stream.getVideoTracks()[0];
+  const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+  torchOn = false;
+  const torchBtn = document.getElementById('scanner-torch');
+  torchBtn.classList.remove('on');
+  torchBtn.style.display = caps.torch ? '' : 'none';
+  try {
+    const detector = await detectorReady;
+    if (scanStream !== stream) return;
+    setScanHint('Fit the code inside the frame. For small bag labels, hold the phone about 15 cm (6 in) away.');
+    scanLoop(detector, stream);
+  } catch (e) {
+    setScanHint(e.message, true);
+  }
+}
+
+// The part of the video inside the on-screen frame (plus some slack), in video
+// pixels. Scanning only that is faster and ignores other labels nearby.
+function scanRegion(video) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const box = video.getBoundingClientRect();
+  const scale = Math.max(box.width / vw, box.height / vh);          // object-fit: cover
+  const offX = (box.width - vw * scale) / 2, offY = (box.height - vh * scale) / 2;
+  const r = document.querySelector('.scanner-window').getBoundingClientRect();
+  const pad = r.width * 0.15;
+  const x = Math.max(0, (r.left - box.left - offX - pad) / scale);
+  const y = Math.max(0, (r.top - box.top - offY - pad) / scale);
+  const w = Math.min(vw - x, (r.width + 2 * pad) / scale);
+  const h = Math.min(vh - y, (r.height + 2 * pad) / scale);
+  return w > 32 && h > 32 ? { x, y, w, h } : { x: 0, y: 0, w: vw, h: vh };
+}
+
+function scanLoop(detector, stream) {
+  const video  = document.getElementById('scanner-video');
+  const canvas = document.createElement('canvas');
+  const ctx    = canvas.getContext('2d', { willReadFrequently: true });
+  const tick = async () => {
+    if (scanStream !== stream) return;
+    if (video.readyState >= 2 && video.videoWidth) {
+      const r = scanRegion(video);
+      const s = Math.min(1, 1280 / Math.max(r.w, r.h));
+      canvas.width = Math.round(r.w * s);
+      canvas.height = Math.round(r.h * s);
+      ctx.drawImage(video, r.x, r.y, r.w, r.h, 0, 0, canvas.width, canvas.height);
+      try {
+        const found = await detector.detect(canvas);
+        if (scanStream !== stream) return;
+        const hit = found.find(f => f.rawValue);
+        if (hit) { onDetected(hit.rawValue); return; }
+      } catch (e) { /* a frame can fail while the camera settles; try the next one */ }
+    }
+    scanTimer = setTimeout(tick, 100);
+  };
+  tick();
+}
+
+function onDetected(raw) {
+  if (navigator.vibrate) navigator.vibrate(60);
+  const target = scanTarget;
+  closeScanner();
+  if (target) fillFromScan(target, raw);
+  else handleScan(raw);
+}
+
+function stopCamera() {
+  clearTimeout(scanTimer);
+  if (scanStream) scanStream.getTracks().forEach(t => t.stop());
+  scanStream = null;
+  document.getElementById('scanner-video').srcObject = null;
+}
+
+function closeScanner() {
+  stopCamera();
+  scanTarget = null;
+  document.getElementById('scanner').classList.remove('open');
+}
+
+async function toggleTorch() {
+  const track = scanStream && scanStream.getVideoTracks()[0];
+  if (!track) return;
+  try {
+    await track.applyConstraints({ advanced: [{ torch: !torchOn }] });
+    torchOn = !torchOn;
+    document.getElementById('scanner-torch').classList.toggle('on', torchOn);
+  } catch (e) { /* not every camera can */ }
+}
+
+function submitManualScan() {
+  const raw = document.getElementById('scanner-manual').value;
+  if (!raw.trim()) return;
+  const target = scanTarget;
+  closeScanner();
+  if (target) fillFromScan(target, raw);
+  else handleScan(raw);
+}
+
+// Scan into a form field (the Barcode field of the item form)
+function scanIntoField(inputId) { openScanner(inputId); }
+
+function fillFromScan(inputId, raw) {
+  const code = ScanCodes.parseCode(raw);
+  if (code.kind === 'item') { showToast('That is an ElectoStock label: it already points to an item.'); return; }
+  const value = ScanCodes.codeToLink(code);
+  if (value) document.getElementById(inputId).value = value;
+}
+
+// The camera stops when the app goes to the background; don't leave a black screen
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && scanStream) closeScanner();
+});
+
+// Handheld USB / Bluetooth scanners type the code quickly and press Enter. Catch
+// that anywhere outside a text field, so they work without opening the camera.
+let wedgeBuf = '', wedgeLast = 0;
+document.addEventListener('keydown', e => {
+  if (!sessionToken || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest && e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (document.querySelector('.modal-overlay.open:not(#scan-modal)')) return;
+  const now = performance.now();
+  if (now - wedgeLast > 80) wedgeBuf = '';   // people type slower than scanners
+  wedgeLast = now;
+  if (e.key === 'Enter') {
+    const raw = wedgeBuf;
+    wedgeBuf = '';
+    if (raw.length >= 4) { e.preventDefault(); closeScanner(); handleScan(raw); }
+  } else if (e.key.length === 1) {
+    wedgeBuf += e.key;
+  }
+});
+
+// ══════════════════════════════════════════════════════════
+//  Scan result: check in / out, link or add
+// ══════════════════════════════════════════════════════════
+const SCAN_ACTIONS = { add: 'Check In', remove: 'Check Out', set: 'Set Count' };
+let scanState = null;  // { view, code, item?, items?, action?, qty?, note?, … }
+
+function savedScanAction() {
+  try { return localStorage.getItem('electostock_scan_action') || 'remove'; } catch (e) { return 'remove'; }
+}
+
+function handleScan(raw) {
+  const code = ScanCodes.parseCode(raw);
+  if (code.kind === 'empty') return;
+  const { items, exact } = ScanCodes.matchItems(code, inventory);
+  if (code.kind === 'item' && !items.length) return showScanSheet({ view: 'gone', code });
+  if (items.length === 1 && exact) return showScanItem(code, items[0]);
+  if (items.length) return showScanSheet({ view: 'choose', code, items, exact });
+  showScanSheet({ view: 'none', code });
+}
+
+// A bag label usually means receiving it, with the quantity printed on it.
+// Anything else (bin labels) starts with whatever was used last.
+function showScanItem(code, item) {
+  const fromBag = code.kind === 'label';
+  showScanSheet({ view: 'item', code, item,
+    action: fromBag ? 'add' : savedScanAction(),
+    qty: fromBag && code.qty ? code.qty : 1, note: '' });
+}
+
+function showScanSheet(state) {
+  scanState = state;
+  renderScanSheet();
+  document.getElementById('scan-modal').classList.add('open');
+}
+
+function closeScanSheet() {
+  scanState = null;
+  document.getElementById('scan-modal').classList.remove('open');
+}
+
+function scanStockClass(item) {
+  return item.qty === 0 && item.min > 0 ? 'low' : item.min > 0 && item.qty < item.min ? 'warn' : 'ok';
+}
+
+function scanItemHtml(item) {
+  return `<div>
+    <div class="scan-item-part">${escapeHtml(item.supplier_part || item.part || '')}</div>
+    <div class="scan-item-name">${escapeHtml(item.name)}${hasBom(item.id) ? '<span class="badge badge-bom">BOM</span>' : ''}</div>
+    <div class="scan-item-meta"><span class="location-pill">${escapeHtml(item.location || 'no location')}</span><span>${escapeHtml(item.category)}</span></div>
+    <div class="scan-stock">
+      <span class="scan-stock-num qty ${scanStockClass(item)}">${Number(item.qty).toLocaleString()}</span>
+      <span class="scan-stock-sub">in stock${item.min > 0 ? ' · min ' + item.min : ''}</span>
+    </div>
+  </div>`;
+}
+
+function scanLabelSummary(code) {
+  if (code.kind !== 'label') return '';
+  const bits = [code.source, code.qty ? code.qty.toLocaleString() + ' pcs' : '', code.supplierPart || code.mfrPart].filter(Boolean);
+  return `<div class="scan-note">Bag label: ${escapeHtml(bits.join(' · '))}</div>`;
+}
+
+function scanListRow(item, onclick) {
+  const sub = [item.supplier_part || item.part, item.location, item.barcode ? 'barcode ' + item.barcode : ''].filter(Boolean).join(' · ');
+  return `<button type="button" class="scan-list-row" onclick="${onclick}">
+    <span class="scan-list-main"><div>${escapeHtml(item.name)}</div><div class="scan-list-sub">${escapeHtml(sub || '—')}</div></span>
+    <span class="qty ${scanStockClass(item)}">${Number(item.qty).toLocaleString()}</span>
+  </button>`;
+}
+
+function renderScanSheet() {
+  const st = scanState;
+  if (!st) return;
+  if (st.item) st.item = inventory.find(i => i.id === st.item.id) || st.item;   // a sync may have replaced it
+  const title = document.getElementById('scan-title');
+  const body = document.getElementById('scan-body');
+  const footer = document.getElementById('scan-footer');
+  const err = '<span class="modal-err" id="scan-err"></span>';
+  const again = `<button class="btn btn-ghost" onclick="openScanner()">⌖ Scan next</button>`;
+
+  if (st.view === 'item') {
+    const it = st.item;
+    title.textContent = 'Scanned item';
+    body.innerHTML = scanItemHtml(it) + scanLabelSummary(st.code) + `
+      <div class="needs-user" style="display:flex;flex-direction:column;gap:10px">
+        <div class="seg">${Object.entries(SCAN_ACTIONS).map(([a, label]) =>
+          `<button type="button" class="${a === st.action ? 'active' : ''}" onclick="setScanAction('${a}')">${label}</button>`).join('')}</div>
+        <div class="qty-stepper">
+          <button type="button" onclick="stepScanQty(-1)" aria-label="Less">−</button>
+          <input id="scan-qty" type="number" inputmode="numeric" min="0" step="1" value="${st.qty}" oninput="updateScanPreview()" aria-label="Quantity"/>
+          <button type="button" onclick="stepScanQty(1)" aria-label="More">+</button>
+        </div>
+        <div class="scan-preview" id="scan-preview"></div>
+        <input id="scan-note" placeholder="Note: job, reason… (optional)" value="${escapeHtml(st.note || '')}"/>
+      </div>`;
+    footer.innerHTML = err + `
+      <button class="btn btn-ghost" onclick="scanShowDetails()">Details</button>
+      ${hasBom(it.id) ? `<button class="btn btn-warn needs-user" onclick="scanBomCheckout()">↑ BOM Checkout</button>` : ''}
+      ${again}
+      <button class="btn btn-primary needs-user" id="scan-apply" onclick="applyScanAdjust()"></button>`;
+    updateScanPreview();
+  } else if (st.view === 'done') {
+    title.textContent = 'Saved';
+    body.innerHTML = `<div class="scan-done"><div class="scan-done-icon">✓</div>
+        <div style="font-weight:500;margin-top:4px">${escapeHtml(st.message)}</div>
+        <div class="scan-preview" style="margin-top:6px">Stock ${st.before.toLocaleString()} → ${st.item.qty.toLocaleString()}</div></div>`
+      + scanItemHtml(st.item);
+    footer.innerHTML = err + `
+      <button class="btn btn-ghost" id="scan-undo" onclick="undoScanAdjust()">↶ Undo</button>
+      <button class="btn btn-ghost" onclick="closeScanSheet()">Done</button>
+      <button class="btn btn-primary" onclick="openScanner()">⌖ Scan next</button>`;
+  } else if (st.view === 'choose') {
+    title.textContent = st.exact ? `${st.items.length} items match` : 'Possible matches';
+    body.innerHTML = scanLabelSummary(st.code)
+      + (st.exact ? '' : `<div style="font-size:12px;color:var(--text2)">Nothing has this part number, but these items mention ${escapeHtml(st.code.mfrPart)}.</div>`)
+      + `<div class="scan-list">${st.items.map(i => scanListRow(i, `pickScanItem(${i.id})`)).join('')}</div>`;
+    footer.innerHTML = err + `<button class="btn btn-ghost" onclick="scanState.view='none';renderScanSheet()">None of these</button>${again}`;
+  } else if (st.view === 'none') {
+    const c = st.code;
+    const facts = c.kind === 'label'
+      ? [['From', c.source || 'Distributor label'], ['Supplier part #', c.supplierPart], ['Customer part #', c.customerPart],
+         ['Manufacturer part #', c.mfrPart], ['Quantity', c.qty ? c.qty.toLocaleString() : '']]
+      : [['Code', ScanCodes.printable(c.raw).slice(0, 200)]];
+    title.textContent = 'Not in inventory';
+    body.innerHTML = `<dl class="scan-facts">${facts.filter(f => f[1]).map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>
+      <div style="font-size:12px;color:var(--text2)" class="needs-user">Link it to an item that's already in inventory so it's found next time, or add it as a new item.</div>`;
+    footer.innerHTML = err + again + `
+      <button class="btn btn-ghost needs-user" onclick="scanState.view='link';scanState.query='';renderScanSheet()">Link to item</button>
+      <button class="btn btn-primary needs-user" onclick="scanAddItem()">＋ Add item</button>`;
+  } else if (st.view === 'link') {
+    title.textContent = 'Link to an item';
+    body.innerHTML = `<input id="scan-link-search" type="search" placeholder="Search items…" value="${escapeHtml(st.query || '')}" oninput="scanState.query=this.value;renderScanLinkList()"/>
+      <div class="scan-list" id="scan-link-list"></div>`;
+    footer.innerHTML = err + `<button class="btn btn-ghost" onclick="scanState.view='none';renderScanSheet()">Back</button>`;
+    renderScanLinkList();
+    setTimeout(() => { const s = document.getElementById('scan-link-search'); if (s) s.focus(); }, 50);
+  } else if (st.view === 'gone') {
+    title.textContent = 'Item not found';
+    body.innerHTML = `<div style="font-size:13px;color:var(--text2)">This label is for item #${st.code.itemId}, which has been deleted.</div>`;
+    footer.innerHTML = err + `<button class="btn btn-ghost" onclick="closeScanSheet()">Close</button>${again}`;
+  }
+}
+
+function scanError(msg) {
+  const el = document.getElementById('scan-err');
+  if (el) el.textContent = msg;
+}
+
+function readScanInputs() {
+  const qty = document.getElementById('scan-qty');
+  const note = document.getElementById('scan-note');
+  if (qty) scanState.qty = qty.value === '' ? NaN : Number(qty.value);
+  if (note) scanState.note = note.value;
+}
+
+function setScanAction(action) {
+  readScanInputs();
+  scanState.action = action;
+  renderScanSheet();
+}
+
+function stepScanQty(delta) {
+  const input = document.getElementById('scan-qty');
+  input.value = Math.max(0, (parseInt(input.value) || 0) + delta);
+  updateScanPreview();
+}
+
+function scanResultQty(have, action, qty) {
+  return action === 'add' ? have + qty : action === 'remove' ? Math.max(0, have - qty) : qty;
+}
+
+function updateScanPreview() {
+  const st = scanState;
+  const qty = Number(document.getElementById('scan-qty').value);
+  const btn = document.getElementById('scan-apply');
+  const ok = document.getElementById('scan-qty').value !== '' && Number.isInteger(qty) && qty >= 0 && (st.action === 'set' || qty > 0);
+  const have = st.item.qty;
+  let text = ok ? `${have.toLocaleString()} → ${scanResultQty(have, st.action, qty).toLocaleString()}` : 'Enter a whole number';
+  if (ok && st.action === 'remove' && qty > have) text += ` (only ${have.toLocaleString()} in stock)`;
+  document.getElementById('scan-preview').textContent = text;
+  if (btn) {
+    btn.disabled = !ok;
+    btn.textContent = st.action === 'set' ? `Set to ${ok ? qty.toLocaleString() : '…'}` : `${SCAN_ACTIONS[st.action]} ${ok ? qty.toLocaleString() : ''}`;
+  }
+}
+
+async function applyScanAdjust() {
+  readScanInputs();
+  const st = scanState;
+  const { item, action, qty } = st;
+  const note = (st.note || '').trim();
+  if (!Number.isInteger(qty) || qty < 0 || (action !== 'set' && qty === 0)) { scanError('Enter a quantity.'); return; }
+  const btn = document.getElementById('scan-apply');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
+  try {
+    const before = item.qty;
+    const r = await api('adjustQty', { id: item.id, action, qty, note });
+    const live = inventory.find(i => i.id === item.id) || item;
+    live.qty = r.newQty;
+    if (st.code.kind !== 'label') { try { localStorage.setItem('electostock_scan_action', action); } catch (e) {} }
+    render();
+    if (selectedId === live.id) renderDetail(live.id);
+    setSyncStatus('ok', 'Saved ' + new Date().toLocaleTimeString());
+    const message = action === 'add' ? `Checked in ${qty.toLocaleString()}`
+                  : action === 'remove' ? `Checked out ${(before - live.qty).toLocaleString()}` : `Count set to ${qty.toLocaleString()}`;
+    // Undo applies the opposite of what actually changed
+    const change = live.qty - before;
+    const undo = action === 'set' ? { action: 'set', qty: before }
+               : change > 0 ? { action: 'remove', qty: change } : { action: 'add', qty: -change };
+    showScanSheet({ view: 'done', code: st.code, item: live, before, message, undo, note });
+  } catch (e) {
+    scanError('Error: ' + e.message);
+    btn.disabled = false;
+    updateScanPreview();
+  }
+}
+
+async function undoScanAdjust() {
+  const st = scanState;
+  const btn = document.getElementById('scan-undo');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div>';
+  try {
+    const note = 'Undo' + (st.note ? ': ' + st.note : '');
+    const r = await api('adjustQty', { id: st.item.id, action: st.undo.action, qty: st.undo.qty, note });
+    st.item.qty = r.newQty;
+    render();
+    if (selectedId === st.item.id) renderDetail(st.item.id);
+    showToast(`Undone: ${st.item.name} is back to ${r.newQty.toLocaleString()}`);
+    showScanItem(st.code, st.item);
+  } catch (e) {
+    scanError('Error: ' + e.message);
+    btn.disabled = false; btn.textContent = '↶ Undo';
+  }
+}
+
+function pickScanItem(id) {
+  const item = inventory.find(i => i.id === id);
+  if (item) showScanItem(scanState.code, item);
+}
+
+function renderScanLinkList() {
+  const q = (scanState.query || '').toLowerCase().trim();
+  const items = inventory
+    .filter(i => !q || [i.name, i.supplier_part, i.part, i.location, i.category].join(' ').toLowerCase().includes(q))
+    .sort((a, b) => a.name.localeCompare(b.name)).slice(0, 60);
+  document.getElementById('scan-link-list').innerHTML = items.length
+    ? items.map(i => scanListRow(i, `linkScanTo(${i.id})`)).join('')
+    : '<div class="bom-picker-empty">No items match</div>';
+}
+
+// Remember the scanned code on an item, so the next scan finds it
+async function linkScanTo(id) {
+  const item = inventory.find(i => i.id === id);
+  const code = scanState.code;
+  if (!item) return;
+  const patch = { id };
+  if (code.kind === 'label' && code.supplierPart && !item.supplier_part) patch.supplier_part = code.supplierPart;
+  const value = ScanCodes.codeToLink(code);
+  if (value && value !== patch.supplier_part) {
+    if (item.barcode && item.barcode !== value &&
+        !confirm(`"${item.name}" already has the barcode ${item.barcode}. Replace it with ${value}?`)) return;
+    patch.barcode = value;
+  }
+  try {
+    const r = await api('update', { item: patch });
+    const idx = inventory.findIndex(i => i.id === id);
+    if (idx >= 0) inventory[idx] = r.item;
+    render();
+    if (selectedId === id) renderDetail(id);
+    showToast(`Linked to ${r.item.name}`);
+    showScanItem(code, r.item);
+  } catch (e) {
+    scanError('Error: ' + e.message);
+  }
+}
+
+// New item form, filled in from what the label says
+function scanAddItem() {
+  const code = scanState.code;
+  closeScanSheet();
+  openModal();
+  const set = (id, v) => { if (v) document.getElementById('f-' + id).value = v; };
+  if (code.kind === 'label') {
+    set('supplier-part', code.supplierPart);
+    set('name', code.mfrPart);
+    set('supplier', code.source);
+    if (code.qty) set('qty', code.qty);
+    const link = ScanCodes.codeToLink(code);
+    if (link !== code.supplierPart) set('barcode', link);
+  } else {
+    set('barcode', code.raw);
+  }
+  setTimeout(() => document.getElementById('f-name').focus(), 50);
+}
+
+function scanShowDetails() {
+  const id = scanState.item.id;
+  closeScanSheet();
+  if (LOG_VIEWS.includes(currentView)) setView('all', document.querySelector('.nav-item'));
+  selectedId = null;
+  selectRow(id);
+}
+
+function scanBomCheckout() {
+  const id = scanState.item.id;
+  closeScanSheet();
+  openBomCheckout(id, null);
+}
+
+// Our labels link to …#item=<id>. Opened from the phone's own camera app (or any
+// link), that item comes up ready to check in or out once the inventory is loaded.
+let pendingItemId = null;
+
+function takeItemFromHash() {
+  const m = /^#item=(\d+)$/.exec(location.hash);
+  if (!m) return false;
+  pendingItemId = Number(m[1]);
+  history.replaceState(null, '', location.pathname + location.search);
+  return true;
+}
+
+function openPendingItem() {
+  if (pendingItemId === null) return;
+  const id = pendingItemId;
+  pendingItemId = null;
+  handleScan(ScanCodes.itemLabelUrl(id));
+}
+
+takeItemFromHash();
+window.addEventListener('hashchange', () => { if (takeItemFromHash() && inventory.length) openPendingItem(); });
+
+// ══════════════════════════════════════════════════════════
+//  Stock moves (check in / out / set, from any screen)
+// ══════════════════════════════════════════════════════════
+let movesEntries = [];
+
+async function loadMoves() {
+  const status = document.getElementById('moves-status');
+  status.style.display = 'block';
+  status.innerHTML = '<div class="spinner" style="margin:0 auto 12px"></div>Loading stock moves…';
+  document.getElementById('moves-list').innerHTML = '';
+  try {
+    movesEntries = (await api('getStockMoves', { limit: 300 })).entries;
+    renderMovesView();
+  } catch (e) {
+    status.innerHTML = `<span style="color:var(--danger)">Error loading stock moves: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+function renderMovesView() {
+  const q = document.getElementById('moves-search').value.toLowerCase().trim();
+  const list = movesEntries.filter(m => !q ||
+    [m.item_name, m.supplier_part, m.location, m.user_email, m.note].join(' ').toLowerCase().includes(q));
+  const status = document.getElementById('moves-status');
+  document.getElementById('moves-count').textContent = list.length ? `${list.length} move${list.length !== 1 ? 's' : ''}` : '';
+  if (!list.length) {
+    status.style.display = 'block';
+    status.innerHTML = movesEntries.length ? 'No moves match the filter'
+      : '<div style="font-size:32px;margin-bottom:12px">⇅</div><div style="font-weight:500;margin-bottom:4px">No stock moves yet</div><div style="font-size:12px">Check-ins, check-outs and counts will appear here</div>';
+    document.getElementById('moves-list').innerHTML = '';
+    return;
+  }
+  status.style.display = 'none';
+  const ACTION_WORDS = { add: 'checked in', remove: 'checked out', set: 'count set' };
+  document.getElementById('moves-list').innerHTML = list.map(m => {
+    const c = m.qty_change;
+    const cls = c > 0 ? 'plus' : c < 0 ? 'minus' : 'zero';
+    const change = c > 0 ? '+' + c.toLocaleString() : c < 0 ? '−' + (-c).toLocaleString() : '±0';
+    const meta = [ACTION_WORDS[m.action], m.user_email, new Date(m.created_at).toLocaleString()].filter(Boolean).join(' · ');
+    return `<div class="move-row">
+      <span class="move-change ${cls}">${change}</span>
+      <div class="move-main">
+        <div class="move-item">${escapeHtml(m.item_name)}${m.supplier_part ? ` <span class="hist-comp-part">${escapeHtml(m.supplier_part)}</span>` : ''}</div>
+        <div class="move-meta">${escapeHtml(meta)}</div>
+        ${m.note ? `<div style="font-size:12px;color:var(--text2)">${escapeHtml(m.note)}</div>` : ''}
+      </div>
+      <span class="move-after">→ ${m.qty_after.toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+
+function showMovesFor(id) {
+  const item = inventory.find(i => i.id === id);
+  document.getElementById('moves-search').value = item ? item.name : '';
+  setView('moves', document.querySelector('.nav-item[onclick*="\'moves\'"]'));
+}
+
+function exportMovesCSV() {
+  if (!movesEntries.length) { alert('No stock moves to export.'); return; }
+  const cols = ['created_at', 'item_id', 'item_name', 'supplier_part', 'location', 'action', 'qty_requested', 'qty_change', 'qty_after', 'note', 'user_email'];
+  const csv = [cols.join(','), ...movesEntries.map(m => cols.map(c => '"' + String(m[c] ?? '').replace(/"/g, '""') + '"').join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'stock_moves.csv';
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════════
+//  Printed labels with a QR code per item
+// ══════════════════════════════════════════════════════════
+let labelIds = [];
+
+function openLabelModal(ids) {
+  closeNav();
+  labelIds = ids.filter(id => inventory.some(i => i.id === id));
+  if (!labelIds.length) { alert('No items to label. Show some items in the list first.'); return; }
+  const first = inventory.find(i => i.id === labelIds[0]);
+  document.getElementById('label-count').textContent = labelIds.length === 1
+    ? `One label for "${first.name}".`
+    : `${labelIds.length} labels, one for each item in the current list.`;
+  try { const s = localStorage.getItem('electostock_label_size'); if (s) document.getElementById('label-size').value = s; } catch (e) {}
+  document.getElementById('label-err').textContent = '';
+  document.getElementById('label-modal').classList.add('open');
+}
+
+function closeLabelModal() { document.getElementById('label-modal').classList.remove('open'); }
+
+async function printLabels() {
+  const size = document.getElementById('label-size').value;
+  try { localStorage.setItem('electostock_label_size', size); } catch (e) {}
+  // Open the window now: after an await the browser no longer counts it as a click
+  const w = window.open('', '_blank');
+  if (!w) { document.getElementById('label-err').textContent = 'Allow pop-ups for this site to print.'; return; }
+  w.document.write('<p style="font-family:sans-serif;padding:32px;color:#666">Preparing labels…</p>');
+  try {
+    await loadLib('qrcode');
+  } catch (e) {
+    w.close();
+    document.getElementById('label-err').textContent = e.message;
+    return;
+  }
+  const items = labelIds.map(id => inventory.find(i => i.id === id)).filter(Boolean);
+  writeLabelsToWindow(w, items, size);
+  closeLabelModal();
+}
+
+function qrSvg(text) {
+  const qr = qrcode(0, 'M');
+  qr.addData(text);
+  qr.make();
+  return qr.createSvgTag({ cellSize: 1, margin: 2, scalable: true });
+}
+
+// Black on white like the pick list. Sizes are in inches to match the label stock.
+function writeLabelsToWindow(w, items, size) {
+  const sheet = size === 'sheet';
+  const label = item => `<div class="label">
+      <div class="qr">${qrSvg(ScanCodes.itemLabelUrl(item.id))}</div>
+      <div class="txt">
+        <div class="name">${escapeHtml(item.name)}</div>
+        ${item.supplier_part || item.part ? `<div class="part">${escapeHtml(item.supplier_part || item.part)}</div>` : ''}
+        ${item.location ? `<div class="loc">${escapeHtml(item.location)}</div>` : ''}
+        <div class="id">ElectoStock #${item.id}</div>
+      </div>
+    </div>`;
+  let content;
+  if (sheet) {
+    const pages = [];
+    for (let i = 0; i < items.length; i += 30) pages.push(`<div class="sheet">${items.slice(i, i + 30).map(label).join('')}</div>`);
+    content = pages.join('');
+  } else {
+    content = items.map(label).join('');
+  }
+  const css = sheet ? `
+    @page { size: letter; margin: 0; }
+    body { padding: 0.5in 0.1875in 0; }
+    .sheet { display: grid; grid-template-columns: repeat(3, 2.625in); grid-auto-rows: 1in; column-gap: 0.125in; break-after: page; }
+    .sheet:last-child { break-after: auto; }
+    .label { width: 2.625in; height: 1in; padding: 0.07in 0.12in; }
+    .qr { width: 0.86in; height: 0.86in; }` : `
+    @page { size: 2.25in 1.25in; margin: 0; }
+    .label { width: 2.25in; height: 1.25in; padding: 0.08in; break-after: page; }
+    .label:last-child { break-after: auto; }
+    .qr { width: 1.07in; height: 1.07in; }`;
+  w.document.open();
+  w.document.write(`<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Labels — ElectoStock</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #000; background: #fff; }
+  .label { display: flex; gap: 0.08in; align-items: center; overflow: hidden; }
+  .qr { flex-shrink: 0; }
+  .qr svg { width: 100%; height: 100%; display: block; }
+  .txt { min-width: 0; display: flex; flex-direction: column; gap: 1pt; }
+  .name { font-size: 8.5pt; font-weight: 700; line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .part { font-family: 'Courier New', monospace; font-size: 7.5pt; overflow-wrap: anywhere; }
+  .loc { font-size: 7.5pt; }
+  .id { font-size: 6pt; color: #555; }
+  @media screen { body { background: #e5e5e5; padding: 16px; } .label { background: #fff; outline: 1px dashed #aaa; margin-bottom: 8px; } .sheet .label { margin: 0; } }
+  ${css}
+</style>
+</head>
+<body>
+${content}
+<script>window.onload = () => window.print();<\/script>
+</body>
+</html>`);
+  w.document.close();
+}
+
+// ══════════════════════════════════════════════════════════
 //  Theme
 // ══════════════════════════════════════════════════════════
 function savedTheme() {
@@ -2703,6 +3812,8 @@ function savedTheme() {
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
+  // Colours the phone's status bar and the installed app's title bar
+  document.querySelector('meta[name="theme-color"]').content = theme === 'light' ? '#ffffff' : '#131619';
   document.querySelectorAll('.theme-toggle').forEach(b => {
     b.textContent = theme === 'light' ? '☾' : '☀';
     b.title       = theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
@@ -2743,6 +3854,7 @@ function showApp(email) {
   document.getElementById('main-shell').style.display = 'flex';
   document.getElementById('sidebar-username').textContent = email || '';
   document.getElementById('sidebar-username').title       = email || '';
+  showInstallTip();
 }
 
 function setLoginInfo(msg) {
