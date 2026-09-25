@@ -144,7 +144,7 @@ export function toSql({ categories, items, lines, log }) {
   out.push(`-- ElectoStock import from the Google Sheet, generated ${new Date().toISOString()}.`);
   out.push('-- Replaces all inventory data; users, profiles and invites are left alone.');
   out.push('begin;');
-  out.push('truncate public.checkout_log, public.bom_lines, public.items, public.categories restart identity;');
+  out.push('truncate public.checkout_log, public.stock_moves, public.bom_lines, public.items, public.categories restart identity;');
   if (categories.length) {
     out.push('insert into public.categories (name, color) values');
     out.push(values(categories, c => [sqlText(c.name), sqlText(c.color)]) + ';');
